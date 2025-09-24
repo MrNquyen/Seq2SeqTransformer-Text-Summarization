@@ -5,6 +5,7 @@ dataset_attributes:
     val: "val.json"
     test: "test.json"
 model_attributes:
+  hidden_size: 768
   encoder:
     pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
     max_length: 312
@@ -12,6 +13,10 @@ model_attributes:
   decoder:
     pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
     max_length: 128
+    num_layers: 4
+    nhead: 12
+    max_length: 32
+    dropout: 0.1
     return_tensors: pt
   adjust_optimizer:
     lr_scale: 0.1 # scale lr for finetuning modules

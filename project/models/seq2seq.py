@@ -109,30 +109,9 @@ class TransformerSummarizer(nn.Module):
         ocr_description_embed = self.encoder(ocr_description)
 
         if self.training:
-            for step in range(self.decoder.max_length):
-                cur_h, cur_c = self.decoder(
-                    obj_features=obj_embed,
-                    ocr_features=ocr_embed,
-                    ocr_mask=ocr_mask,
-                    obj_mask=obj_mask,
-                    prev_hidden_state=prev_h,
-                    prev_cell_state=prev_c,
-                    prev_word_embed=prev_word_embed
-                )
-                prev_h = cur_h
-                prev_c = cur_c
-                
-                results = {
-                    "hidden_state": cur_h,
-                    "prev_word_inds": torch.flatten(prev_word_inds),
-                    "vocab_size": self.num_choices,
-                    "ocr_feat": ocr_embed,
-                    "ocr_boxes": batch["list_ocr_boxes"],
-                    "ocr_mask": ocr_mask
-                }
-                score = self.forward_output(results=results) # BS, num_common + num_ocr, 1
-                scores[:, step, :] = score.permute(0, 2, 1).squeeze(1) # BS, 1, num_common + num_ocr
-            return scores, caption_inds
+            pass
+        else:
+            pass
         
         
     def forward_output(self, results):

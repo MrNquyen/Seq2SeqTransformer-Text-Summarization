@@ -6,23 +6,26 @@ from utils.registry import registry
 from icecream import ic
 
 from project.modules.base import PreTrainedModel
+from utils.module_utils import _get_causal_mask
 
 
 # -- Previous Embedding
 class PrevEmbedding(nn.Module):
-    def __init__(self, hidden_size, decoder_config):
+    def __init__(self, hidden_size):
         super().__init__()
-        self.DEC_LENGTH = decoder_config["max_length"] # Max caption output length
-        self.hidden_size = hidden_size
+        self.model_config = registry.get_config("model_attributes")
+        self.decoder_config = self.model_config["decoder"]
+        self.hidden_size = self.model_config["hidden_size"]
+        
+        self.DEC_LENGTH = self.decoder_config["max_length"] # Max summarize output length
 
         self.positional_embedding = nn.Embedding(
             num_embeddings=self.DEC_LENGTH, 
             embedding_dim=hidden_size
         )
-
-        self.ans_emb_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
+    
         self.emb_layer_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
-        self.emb_dropout = nn.Dropout(decoder_config["dropout"])
+        self.emb_dropout = nn.Dropout(self.decoder_config["dropout"])
 
 
     def init_pe_weights(self):
@@ -41,30 +44,39 @@ class PrevEmbedding(nn.Module):
         # Assign custom weights
         self.positional_embedding.weight.data = pe.clone()
 
-    
+
     def forward(
             self,
-            ans_emb,
+            ans_fixed_embed,
             prev_inds
         ):
         """
-            Args:
-                -     
+            :params ans_fixed_embed    :  common_vocab_len, hidden_size:   All embedding of common vocab
+            :params prev_inds                :  BS, list_prev_idx_in_vocab   :   All idx in vocab of prev word in 
+            ----
+            Note:
+                - Idx of ocr token start from: vocab_len + 1
+                (Because append ocr_vocab to common_vocab)
+                - When training, input all the gt caption and mask, so the model cannot see the future
+            ----
+            Function:
+                - Lookup table embed position, and get prev embeded vector
         """
         # -- Params
         batch_size = prev_inds.shape[0]
         current_seq_length = prev_inds.shape[1]
-        vocab_size = ans_emb.shape[0]
+        vocab_size = common_voc_embedding.shape[0]
+        ocr_size = ocr_embedding.shape[1]
 
         # -- Get prev vector embed
-        ans_emb = self.ans_emb_norm(ans_emb)
+        common_voc_embedding = self.common_voc_embedding_norm(common_voc_embedding)
         ocr_embedding = self.ocr_embedding_norm(ocr_embedding)
-        assert ans_emb.size(-1) == ocr_embedding.size(-1)
+        assert common_voc_embedding.size(-1) == ocr_embedding.size(-1)
 
-        ans_emb = ans_emb.unsqueeze(0).expand(batch_size, -1, -1)
-        # ic(ans_emb.shape, ocr_embedding.shape)
+        common_voc_embedding = common_voc_embedding.unsqueeze(0).expand(batch_size, -1, -1)
+        # ic(common_voc_embedding.shape, ocr_embedding.shape)
         look_up_table_embedding = torch.concat(
-            [ans_emb, ocr_embedding],
+            [common_voc_embedding, ocr_embedding],
             dim=1
         )
 
@@ -105,11 +117,38 @@ class Decoder(PreTrainedModel):
         super().__init__(_type="decoder")
         self.encoder = self.model.encoder
 
+    def prev_embedding(self, input_ids):
+        return self.text_embedding(input_ids)
+
+
     def forward(
             self,
             prev_inds: torch.Tensor,
-            texts_emb: torch.Tensor
+            texts_emb: torch.Tensor,
+            attention_mask: torch.Tensor
         ):
-        pass
+        prev_embed = self.prev_embedding(prev_inds)
+        
+        #-- Multihead broadcasting
+        end_when_reach_maxlen = attention_mask.size(1) # 
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+        extended_attention_mask = extended_attention_mask.repeat(
+            1, 1, end_when_reach_maxlen, 1
+        )
+
+        #-- Casual mask
+        extended_attention_mask[:, :, :, :] = \
+            _get_causal_mask(prev_embed.size(1), self.device)
+        extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
+        
+        assert not extended_attention_mask.requires_grad
+        head_mask = [None] * self.config["num_layers"]
+        
+        encoder_outputs = self.encoder(
+            prev_embed,
+            extended_attention_mask,
+            head_mask=head_mask
+        )
+        return encoder_outputs
 
     
