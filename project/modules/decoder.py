@@ -148,7 +148,7 @@ class Decoder(PreTrainedModel):
 
         #-- Casual mask
         extended_attention_mask[:, :, dec_input_begin:, dec_input_begin:] = \
-            _get_causal_mask(prev_embed.size(1), self.device)
+            _get_causal_mask(dec_input_end - dec_input_begin, self.device)
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         
         assert not extended_attention_mask.requires_grad
@@ -160,6 +160,14 @@ class Decoder(PreTrainedModel):
             extended_attention_mask,
             head_mask=head_mask
         )
-        return encoder_outputs
+
+        mmt_seq_output = encoder_outputs[0]
+        mmt_dec_output = mmt_seq_output[:, dec_input_begin:]
+
+        results = {
+            "mmt_dec_output": mmt_dec_output
+        }
+
+        return results
 
     

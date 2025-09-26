@@ -8,14 +8,13 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from utils.configs import Config
 from project.dataset.dataset import get_loader
-from utils.vocab import OCRVocab
 from utils.model_utils import get_optimizer_parameters
 from utils.module_utils import _batch_padding, _batch_padding_string
 from utils.logger import Logger
 from utils.metrics import metric_calculate
 from utils.utils import save_json
 from utils.registry import registry
-from project.models.lstmr import LSTMR
+from project.models.seq2seq import TransformerSummarizer
 from icecream import ic
 
 # ~Trainer~
@@ -61,7 +60,7 @@ class Trainer():
         self.build_training_params()
 
     def build_model(self):
-        self.model = LSTMR()
+        self.model = TransformerSummarizer()
         self.model.to(self.device)
 
     def build_training_params(self):
@@ -99,7 +98,7 @@ class Trainer():
 
 
     def build_loss(self):
-        pad_idx = self.model.word_embedding.common_vocab.get_pad_index()
+        pad_idx = self.encoder.get_pad_token_id()
         loss_fn = nn.CrossEntropyLoss(ignore_index=pad_idx)
         return loss_fn
 
@@ -139,8 +138,8 @@ class Trainer():
         """
             Forward to model
         """
-        scores, inds = self.model(batch)
-        return scores, inds
+        scores, pred_inds, gt_inds = self.model(batch)
+        return scores, pred_inds, gt_inds
 
 
     def _extract_loss(self, scores, targets):
@@ -177,12 +176,6 @@ class Trainer():
 
     #---- MODE
     def match_device(self, batch):
-        batch["list_ocr_boxes"] = batch["list_ocr_boxes"].to(self.device)
-        batch["list_ocr_feat"] = batch["list_ocr_feat"].to(self.device)
-        batch["ocr_mask"] = batch["ocr_mask"].to(self.device)
-        batch["list_obj_boxes"] = batch["list_obj_boxes"].to(self.device)
-        batch["list_obj_feat"] = batch["list_obj_feat"].to(self.device)
-        batch["obj_mask"] = batch["obj_mask"].to(self.device)
         return batch
 
     def preprocess_batch(self, batch):
@@ -191,26 +184,6 @@ class Trainer():
                 - Padding ocr and obj to the same length
                 - Create mask for ocr and obj
         """
-        model_config = self.config.config_model
-        dim_ocr = model_config["ocr"]["dim"]
-        dim_obj = model_config["obj"]["dim"]
-        box_pad = torch.zeros((1, 4))
-
-        box_pad = torch.zeros((1, 4))
-        # Padding ocr
-        ocr_feat_pad = torch.zeros((1, dim_ocr))
-        # ic(type(batch["list_ocr_boxes"][0]))
-
-        batch["list_ocr_boxes"], ocr_mask = _batch_padding(batch["list_ocr_boxes"], max_length=model_config["ocr"]["num_ocr"], pad_value=box_pad)
-        batch["list_ocr_feat"] = _batch_padding(batch["list_ocr_feat"], max_length=model_config["ocr"]["num_ocr"], pad_value=ocr_feat_pad, return_mask=False)
-        batch["list_ocr_tokens"] = _batch_padding_string(batch["list_ocr_tokens"], max_length=model_config["ocr"]["num_ocr"], pad_value="<pad>", return_mask=False)
-        batch["ocr_mask"] = ocr_mask.to(torch.bool)
-
-        # Padding obj
-        obj_feat_pad = torch.zeros((1, dim_obj))
-        batch["list_obj_boxes"], obj_mask = _batch_padding(batch["list_obj_boxes"], max_length=model_config["obj"]["num_obj"], pad_value=box_pad)
-        batch["list_obj_feat"] = _batch_padding(batch["list_obj_feat"], max_length=model_config["obj"]["num_obj"], pad_value=obj_feat_pad, return_mask=False)
-        batch["obj_mask"] = obj_mask.to(torch.bool)
         return batch
 
 
@@ -230,43 +203,50 @@ class Trainer():
                 self.writer.LOG_INFO(f"Training batch: {batch_id + 1}")
                 batch = self.preprocess_batch(batch)
                 batch = self.match_device(batch)
-                list_ocr_tokens = batch["list_ocr_tokens"]
                 list_captions = batch["list_captions"]
 
                 self.current_iteration += 1
                 #~ Loss cal - For training so it is caption_ids
-                scores_output, caption_inds = self._forward_pass(batch)
-                targets = self.model.word_embedding.get_prev_inds(
-                    list_captions, list_ocr_tokens
-                ).to(self.device)
-                loss = self._extract_loss(scores_output, targets)
+                scores_output, caption_inds, target_inds = self._forward_pass(batch)
+                loss = self._extract_loss(scores_output, target_inds)
                 self._backward(loss)
                 
                 if self.current_iteration > self.max_iterations:
                     break
 
-            self.save_model(
-                model=self.model,
-                loss=loss,
-                optimizer=self.optimizer,
-                epoch=self.current_epoch, 
-                metric_score=None,
-                use_name="last"
-            )
-            
-            if self.current_epoch % 2 == 0:
-                _, _, val_final_scores, loss = self.evaluate(epoch_id=self.current_epoch, split="val")
-                # _, _, final_scores = self.evaluate(epoch_id=self.current_epoch, split="test")
-                if val_final_scores["CIDEr"] > best_scores:
-                    best_scores = val_final_scores["CIDEr"]
+                if self.current_iteration % self.snapshot_interval == 0:
+                    _, _, val_final_scores, loss = self.evaluate(epoch_id=self.current_iteration, split="val")
+                    # _, _, final_scores = self.evaluate(epoch_id=self.current_epoch, split="test")
+                    if val_final_scores["CIDEr"] > best_scores:
+                        best_scores = val_final_scores["CIDEr"]
+                        self.save_model(
+                            model=self.model,
+                            loss=loss,
+                            optimizer=self.optimizer,
+                            epoch=self.current_epoch, 
+                            iteration=self.current_iteration,
+                            metric_score=best_scores,
+                            use_name="best"
+                        )
                     self.save_model(
                         model=self.model,
                         loss=loss,
                         optimizer=self.optimizer,
                         epoch=self.current_epoch, 
+                        iteration=self.current_iteration,
                         metric_score=best_scores,
-                        use_name="best"
+                        use_name=self.current_iteration
                     )
+                    self.save_model(
+                        model=self.model,
+                        loss=loss,
+                        optimizer=self.optimizer,
+                        epoch=self.current_epoch, 
+                        iteration=self.current_iteration,
+                        metric_score=best_scores,
+                        use_name="last"
+                    )
+                    
                     
     
     def evaluate(self, epoch_id=None, split="val"):
@@ -285,29 +265,26 @@ class Trainer():
             for batch_id, batch in tqdm(enumerate(dataloader), desc=f"Evaluating {split} loader"):
                 self.writer_evaluation.LOG_INFO(f"Evaluate batch: {batch_id + 1}")
                 list_id = batch["list_id"]
-                list_ocr_tokens = batch["list_ocr_tokens"]
                 list_captions = batch["list_captions"]
                 batch = self.preprocess_batch(batch)
                 batch = self.match_device(batch)
                 
                 #~ Calculate loss
-                scores_output, pred_inds = self._forward_pass(batch)
-                targets = self.model.word_embedding.get_prev_inds(
-                    list_captions, list_ocr_tokens
-                ).to(self.device)
-                loss = self._extract_loss(scores_output, targets)
-                losses.append(loss)
+                scores_output, pred_inds, target_inds = self._forward_pass(batch)
+                loss = self._extract_loss(scores_output, target_inds)
+                loss_scalar = loss.detach().cpu().item()
+                losses.append(loss_scalar)
+                
                 #~ Metrics calculation
                 if not epoch_id==None:
                     self.writer_evaluation.LOG_INFO(f"Logging at epoch {epoch_id}")
                 
-                pred_caps = self.get_pred_captions(pred_inds, list_ocr_tokens)
+                pred_caps = self.get_pred_captions(pred_inds)
                 for id, pred_cap, ref_cap in zip(list_id, pred_caps, list_captions):
                     hypo[id] = [pred_cap]
                     ref[id]  = [ref_cap]
             
             # Calculate Metrics
-            # ic(ref, hypo)
             final_scores = metric_calculate(ref, hypo)
             avg_loss = sum(losses) / len(losses) 
             self.writer_evaluation.LOG_INFO(f"|| Metrics Calculation || {split} split || epoch: {epoch_id} || loss: {avg_loss}")
@@ -343,7 +320,7 @@ class Trainer():
         return hypo, ref
 
     #---- FINISH
-    def save_model(self, model, loss, optimizer, epoch, metric_score, use_name=""):
+    def save_model(self, model, loss, optimizer, epoch, iteration, metric_score, use_name=""):
         if not os.path.exists(self.args.save_dir):
             self.writer.LOG_INFO("Save dir not exist")
             os.makedirs(self.args.save_dir, exist_ok=True)
@@ -353,6 +330,7 @@ class Trainer():
 
         torch.save({
             'epoch': epoch,
+            "iteration": iteration,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'loss': loss,
@@ -370,23 +348,12 @@ class Trainer():
         self.writer.LOG_INFO(f"=== Load model at epoch: {self.current_epoch} || loss: {loss} ===")
 
     #---- METRIC CALCULATION
-    def get_pred_captions(self, pred_inds, ocr_tokens):
+    def get_pred_captions(self, pred_inds):
         """
             Predict batch
         """
         # Captioning
-        common_vocab = self.model.word_embedding.common_vocab
-        vocab_size = common_vocab.get_size()
-        ocr_vocab_object = OCRVocab(ocr_tokens=ocr_tokens)
-        captions_pred = [
-            " ".join([
-                common_vocab.get_idx_word(idx.item())
-                if idx < vocab_size
-                else ocr_vocab_object[i].get_idx_word(idx.item() - vocab_size)
-                for idx in item_pred_inds
-            ])
-            for i, item_pred_inds in enumerate(pred_inds)
-        ]
+        captions_pred = self.encoder.batch_decode(pred_inds, skip_special_tokens=True)
         return captions_pred # BS, 
     
 

@@ -28,7 +28,7 @@ class PretrainedModel(nn.Module):
         self.model.gradient_checkpointing_enable()
         self.init_weights()
 
-
+    #-- Tokenize
     def tokenize(self, texts: List[str]):
         """
             Args:
@@ -44,33 +44,38 @@ class PretrainedModel(nn.Module):
                     'attention_mask': ...,
                 }
         """
-        input_ids = self.tokenizer(
+        inputs = self.tokenizer(
             texts,
             truncation=True,
             padding="max_length",
             max_length=self.max_length,
             return_tensors="pt"        # return PyTorch tensors directly
         )
-        return input_ids # 'input_ids', 'token_type_ids', 'attention_mask'
+        return inputs # 'input_ids', 'token_type_ids', 'attention_mask'
     
-    def text_embedding(self, input_ids):
+    def text_embedding(self, inputs):
         """
             Args:
-                - input_ids: (str): Input is a output from tokenizer
+                - inputs: (str): Input is a output from tokenizer
 
             Return:
                 - Tensor: Tensor of text embeb features
 
             Example: 
-                - input_ids = {
+                - inputs = {
                     'input_ids': ..., 
                     'token_type_ids': ..., 
                     'attention_mask': ...,
                 }
         """
         with torch.no_grad():
-            features = self.model(**input_ids)
+            features = self.model(**inputs)
             return features.last_hidden_state
+
+
+    #-- Decode
+    def batch_decode(self, pred_inds):
+        return self.tokenizer.batch_decode(pred_inds, skip_special_tokens=True)
 
 
     #-- Common function

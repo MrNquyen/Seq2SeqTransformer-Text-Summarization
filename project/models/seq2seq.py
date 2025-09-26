@@ -107,28 +107,59 @@ class TransformerSummarizer(nn.Module):
             self,
             batch
         ):
-        gt_caption = batch["captions"]
-        ocr_description = batch["ocr_description"]
+        gt_captions = batch["list_captions"]
+        ocr_descriptions = batch["list_ocr_descriptions"]
 
-        #-- Get inds
-        gt_caption_inds = self.encoder.tokenize(gt_caption)
-        ocr_description_inds = self.encoder.tokenize(ocr_description)
+        #-- Get inputs
+        gt_caption_inputs = self.encoder.tokenize(gt_captions)
+        ocr_description_inputs = self.encoder.tokenize(ocr_descriptions)
 
         #-- Get embeds
-        gt_caption_embed = self.encoder.text_embedding(gt_caption_inds)
-        ocr_description_embed = self.encoder.text_embedding(ocr_description_inds)
+        ocr_description_embed = self.encoder.text_embedding(ocr_description_inputs)
 
         #-- Get inds
+        batch_size = len(gt_captions)
         if self.training:
-            self.decoder(
-                prev_inds= ocr_description_inds,
-                ocr_description_embed=ocr_description_embed)
-                fixed_ans_emb=  self.classifier.weight,
-                "ocr_description_attention_mask": 
+            results = self.forward_mmt(
+                prev_inds= ocr_description_inputs["input_ids"],
+                ocr_description_embed=ocr_description_embed,
+                fixed_ans_emb=self.classifier.weight,
+                ocr_description_attention_mask=ocr_description_inputs["attention_mask"]
             )
+            scores = self.forward_output(results=results)
+            return scores, ocr_description_inputs["input_ids"], gt_caption_inputs["input_ids"]
         else:
-            pass
-        
+            num_dec_step = self.decoder.max_length
+            # Init prev_ids with <s> idx at begin, else where with <pad> (at idx 0)
+            start_idx = self.encoder.get_cls_token_id() 
+            pad_idx = self.encoder.get_pad_token_id()
+
+            prev_inds = torch.full((batch_size, num_dec_step), pad_idx).to(self.device)
+            prev_inds[:, 0] = start_idx
+            scores = None
+            for i in range(num_dec_step):
+                results = self.forward_mmt(
+                    prev_inds= prev_inds,
+                    ocr_description_embed=ocr_description_embed,
+                    fixed_ans_emb=self.classifier.weight,
+                    ocr_description_attention_mask=ocr_description_inputs["attention_mask"]
+                )
+                scores = self.forward_output(results)
+                argmax_inds = scores.argmax(dim=-1)
+                prev_inds = argmax_inds[:, :-1]
+            return scores, prev_inds, gt_caption_inputs["input_ids"]
+
+    def forward_mmt(self, ocr_description_inputs, ocr_description_embed):
+        """
+            Forward to mmt layer
+        """
+        results = self.decoder(
+            prev_inds= ocr_description_inputs["input_ids"],
+            ocr_description_embed=ocr_description_embed,
+            fixed_ans_emb=self.classifier.weight,
+            ocr_description_attention_mask=ocr_description_inputs["attention_mask"]
+        )
+        return results
         
     def forward_output(self, results):
         """
@@ -142,6 +173,7 @@ class TransformerSummarizer(nn.Module):
             Return:
             ----------
         """
-        pass
-
+        mmt_dec_output = results["mmt_dec_output"]
+        fixed_scores = self.classifier(mmt_dec_output)
+        return fixed_scores
 
