@@ -6,7 +6,7 @@ from utils.registry import registry
 from icecream import ic
 
 from project.modules.base import PreTrainedModel
-from utils.module_utils import _get_causal_mask
+from utils.module_utils import _batch_gather, _get_causal_mask
 
 
 # -- Previous Embedding
@@ -47,11 +47,11 @@ class PrevEmbedding(nn.Module):
 
     def forward(
             self,
-            ans_fixed_embed,
+            fixed_ans_emb,
             prev_inds
         ):
         """
-            :params ans_fixed_embed    :  common_vocab_len, hidden_size:   All embedding of common vocab
+            :params fixed_ans_emb    :  common_vocab_len, hidden_size:   All embedding of common vocab
             :params prev_inds                :  BS, list_prev_idx_in_vocab   :   All idx in vocab of prev word in 
             ----
             Note:
@@ -65,24 +65,14 @@ class PrevEmbedding(nn.Module):
         # -- Params
         batch_size = prev_inds.shape[0]
         current_seq_length = prev_inds.shape[1]
-        vocab_size = common_voc_embedding.shape[0]
-        ocr_size = ocr_embedding.shape[1]
 
         # -- Get prev vector embed
-        common_voc_embedding = self.common_voc_embedding_norm(common_voc_embedding)
-        ocr_embedding = self.ocr_embedding_norm(ocr_embedding)
-        assert common_voc_embedding.size(-1) == ocr_embedding.size(-1)
-
-        common_voc_embedding = common_voc_embedding.unsqueeze(0).expand(batch_size, -1, -1)
-        # ic(common_voc_embedding.shape, ocr_embedding.shape)
-        look_up_table_embedding = torch.concat(
-            [common_voc_embedding, ocr_embedding],
-            dim=1
-        )
+        fixed_ans_emb = self.fixed_ans_emb_norm(fixed_ans_emb)
+        fixed_ans_emb = fixed_ans_emb.unsqueeze(0).expand(batch_size, -1, -1)
 
         # ic(look_up_table_embedding.device, prev_inds.device)
-        last_word_embeddings = _batch_gather(
-            x=look_up_table_embedding, 
+        last_word_embed = _batch_gather(
+            x=fixed_ans_emb, 
             inds=prev_inds
         )
 
@@ -90,24 +80,16 @@ class PrevEmbedding(nn.Module):
         position_ids = torch.arange(
             current_seq_length,
             dtype=torch.long,
-            device=ocr_embedding.device
+            device=self.device
         )
         # ic(position_ids)
         position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
-        position_embeddings = self.positional_embedding(position_ids)
+        position_embed = self.positional_embedding(position_ids)
+        position_embed = self.emb_layer_norm(position_embed)
+        position_embed = self.emb_dropout(position_embed)
 
-        # -- Type embedding: 0: common tokens (False) - 1: ocr_tokens (True)
-        type_ids = position_ids.ge(vocab_size).long()
-        token_type_embedddings = self.token_type_embedding(type_ids)
-
-        # -- Position and token type
-        pos_type_embeddings = position_embeddings + token_type_embedddings 
-        # ic(pos_type_embeddings.shape)
-        pos_type_embeddings = self.emb_layer_norm(pos_type_embeddings)
-        pos_type_embeddings = self.emb_dropout(pos_type_embeddings)
-
-        # -- LastWord, Position, token type
-        prev_emb = last_word_embeddings + pos_type_embeddings
+        # -- LastWord, Position
+        prev_emb = last_word_embed + position_embed
         return prev_emb # BS, num_prev_words, hidden_size
 
 
@@ -116,19 +98,47 @@ class Decoder(PreTrainedModel):
     def __init__(self):
         super().__init__(_type="decoder")
         self.encoder = self.model.encoder
-
-    def prev_embedding(self, input_ids):
-        return self.text_embedding(input_ids)
+        self.prev_embedding = PrevEmbedding(hidden_size=self.hidden_size)
 
 
     def forward(
             self,
             prev_inds: torch.Tensor,
-            texts_emb: torch.Tensor,
-            attention_mask: torch.Tensor
+            ocr_description_embed: torch.Tensor,
+            fixed_ans_emb: torch.Tensor,
+            ocr_description_attention_mask: torch.Tensor
         ):
-        prev_embed = self.prev_embedding(prev_inds)
+        #-- Input features
+        prev_embed = self.prev_embedding(
+            fixed_ans_emb=fixed_ans_emb,
+            prev_inds=prev_inds
+        )
+
+        encoder_inputs = torch.cat(
+            [ocr_description_embed, prev_embed],
+            dim=1
+        )
+
+        #-- Mask Attention
+        dec_mask = torch.zeros(
+            prev_embed.size(0),
+            prev_embed.size(1),
+            dtype=torch.float16,
+            device=self.device
+        )
+
+        attention_mask = torch.cat(
+            [ocr_description_attention_mask, dec_mask],
+            dim=1
+        )
         
+        #-- Offsets of each modality in the joint embedding space
+        encoder_input_begin = 0
+        encoder_input_end = encoder_input_begin + ocr_description_embed.size(1)
+        dec_input_begin = encoder_input_end
+        dec_input_end = dec_input_begin + prev_embed.size(1)
+
+
         #-- Multihead broadcasting
         end_when_reach_maxlen = attention_mask.size(1) # 
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
@@ -137,15 +147,16 @@ class Decoder(PreTrainedModel):
         )
 
         #-- Casual mask
-        extended_attention_mask[:, :, :, :] = \
+        extended_attention_mask[:, :, dec_input_begin:, dec_input_begin:] = \
             _get_causal_mask(prev_embed.size(1), self.device)
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         
         assert not extended_attention_mask.requires_grad
         head_mask = [None] * self.config["num_layers"]
-        
+
+        #-- Transformer Encoder
         encoder_outputs = self.encoder(
-            prev_embed,
+            encoder_inputs,
             extended_attention_mask,
             head_mask=head_mask
         )

@@ -32,7 +32,7 @@ class TransformerSummarizer(nn.Module):
         self.build_model_init()
 
         self.writer.LOG_INFO("=== Build model outputs ===")
-        self.build_ouput()
+        self.build_output()
 
         self.writer.LOG_INFO("=== Build adjust learning rate ===")
         self.adjust_lr()
@@ -46,10 +46,15 @@ class TransformerSummarizer(nn.Module):
         self.decoder = Decoder()
         self.encoder = Encoder()
 
+    def build_output(self):
+        num_choices = self.encoder.get_vocab_size()
+        fixed_embed = self.encoder.model.model.embeddings.word_embeddings.weight
+        self.classifier = nn.Linear(self.hidden_size, num_choices)
+        self.classifier.weight = fixed_embed
     
     def adjust_lr(self):
         #~ Word Embedding
-        self.add_finetune_modules(self.word_embedding)
+        self.add_finetune_modules(self.classifier)
 
 
     #-- ADJUST LEARNING RATE
@@ -105,11 +110,22 @@ class TransformerSummarizer(nn.Module):
         gt_caption = batch["captions"]
         ocr_description = batch["ocr_description"]
 
-        gt_caption_embed = self.encoder(gt_caption)
-        ocr_description_embed = self.encoder(ocr_description)
+        #-- Get inds
+        gt_caption_inds = self.encoder.tokenize(gt_caption)
+        ocr_description_inds = self.encoder.tokenize(ocr_description)
 
+        #-- Get embeds
+        gt_caption_embed = self.encoder.text_embedding(gt_caption_inds)
+        ocr_description_embed = self.encoder.text_embedding(ocr_description_inds)
+
+        #-- Get inds
         if self.training:
-            pass
+            self.decoder(
+                prev_inds= ocr_description_inds,
+                ocr_description_embed=ocr_description_embed)
+                fixed_ans_emb=  self.classifier.weight,
+                "ocr_description_attention_mask": 
+            )
         else:
             pass
         

@@ -75,8 +75,7 @@ class PretrainedModel(nn.Module):
 
     #-- Common function
     def get_vocab_size(self):
-        return self.tokenizer.vocab_size
-
+        return len(self.tokenizer.get_vocab())
 
     #-- Get token
     def get_pad_token(self):
