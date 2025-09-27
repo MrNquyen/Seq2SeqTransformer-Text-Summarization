@@ -12,7 +12,8 @@ from tqdm import tqdm
 class ViInforgraphicSummarizeDataset(Dataset):
     def __init__(self, dataset_config, split):
         super().__init__()
-        annotation_dict = dataset_config["annotations"][split]
+        annotation_path = dataset_config["annotations"][split]
+        annotation_dict = load_json(annotation_path)
 
         for im_id, item in annotation_dict.items():
             self.data.append({
