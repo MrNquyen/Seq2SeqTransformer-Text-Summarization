@@ -1,13 +1,14 @@
 import torch
 from torch import nn
 from project.modules.decoder import Decoder
-from project.modules.encoder import Encoder
+from project.modules.encoder import EncoderDescription, EncoderSummary
 from utils.registry import registry
 from utils.utils import count_nan
 from utils.module_utils import _batch_gather
 from torch.nn import functional as F
 from icecream import ic
 import math
+import time
 
 
 class TransformerSummarizer(nn.Module):
@@ -21,15 +22,14 @@ class TransformerSummarizer(nn.Module):
 
     #-- BUILD
     def build(self):
-        self.writer.LOG_INFO("=== Build model params ===")
-        self.build_model_params()
-        
         self.writer.LOG_INFO("=== Build writer ===")
         self.build_writer()
 
+        self.writer.LOG_INFO("=== Build model init ===")
+        self.build_model_init()
+
         self.writer.LOG_INFO("=== Build model layers ===")
         self.build_layers()
-        self.build_model_init()
 
         self.writer.LOG_INFO("=== Build model outputs ===")
         self.build_output()
@@ -44,14 +44,22 @@ class TransformerSummarizer(nn.Module):
 
     def build_layers(self):
         self.decoder = Decoder()
-        self.encoder = Encoder()
+        self.encoder_description = EncoderDescription()
+        self.encoder_summary = EncoderSummary()
+
 
     def build_output(self):
-        num_choices = self.encoder.get_vocab_size()
-        fixed_embed = self.encoder.model.model.embeddings.word_embeddings.weight
+        num_choices = self.encoder_summary.get_vocab_size()
+        fixed_embed = self.encoder_summary.model.embeddings.word_embeddings.weight
         self.classifier = nn.Linear(self.hidden_size, num_choices)
         self.classifier.weight = fixed_embed
     
+
+    def build_model_init(self):
+        #~ Finetune module is the module has lower lr than others module
+        self.finetune_modules = []
+
+
     def adjust_lr(self):
         #~ Word Embedding
         self.add_finetune_modules(self.classifier)
@@ -111,28 +119,28 @@ class TransformerSummarizer(nn.Module):
         ocr_descriptions = batch["list_ocr_descriptions"]
 
         #-- Get inputs
-        gt_caption_inputs = self.encoder.tokenize(gt_captions)
-        ocr_description_inputs = self.encoder.tokenize(ocr_descriptions)
+        gt_caption_inputs = self.encoder_summary.tokenize(gt_captions)
+        ocr_description_inputs = self.encoder_description.tokenize(ocr_descriptions)
 
         #-- Get embeds
-        ocr_description_embed = self.encoder.text_embedding(ocr_description_inputs)
+        ocr_description_embed = self.encoder_description.text_embedding(ocr_description_inputs)
 
         #-- Get inds
         batch_size = len(gt_captions)
         if self.training:
             results = self.forward_mmt(
-                prev_inds= ocr_description_inputs["input_ids"],
-                ocr_description_embed=ocr_description_embed,
+                prev_inds= gt_caption_inputs["input_ids"],
+                input_embed=ocr_description_embed,
                 fixed_ans_emb=self.classifier.weight,
-                ocr_description_attention_mask=ocr_description_inputs["attention_mask"]
+                input_attention_mask=ocr_description_inputs["attention_mask"]
             )
             scores = self.forward_output(results=results)
-            return scores, ocr_description_inputs["input_ids"], gt_caption_inputs["input_ids"]
+            return scores, gt_caption_inputs["input_ids"], gt_caption_inputs["input_ids"]
         else:
             num_dec_step = self.decoder.max_length
             # Init prev_ids with <s> idx at begin, else where with <pad> (at idx 0)
-            start_idx = self.encoder.get_cls_token_id() 
-            pad_idx = self.encoder.get_pad_token_id()
+            start_idx = self.encoder_description.get_cls_token_id() 
+            pad_idx = self.encoder_description.get_pad_token_id()
 
             prev_inds = torch.full((batch_size, num_dec_step), pad_idx).to(self.device)
             prev_inds[:, 0] = start_idx
@@ -140,24 +148,24 @@ class TransformerSummarizer(nn.Module):
             for i in range(num_dec_step):
                 results = self.forward_mmt(
                     prev_inds= prev_inds,
-                    ocr_description_embed=ocr_description_embed,
+                    input_embed=ocr_description_embed,
                     fixed_ans_emb=self.classifier.weight,
-                    ocr_description_attention_mask=ocr_description_inputs["attention_mask"]
+                    input_attention_mask=ocr_description_inputs["attention_mask"]
                 )
                 scores = self.forward_output(results)
                 argmax_inds = scores.argmax(dim=-1)
-                prev_inds = argmax_inds[:, :-1]
+                prev_inds[:, 1:] = argmax_inds[:, :-1]
             return scores, prev_inds, gt_caption_inputs["input_ids"]
 
-    def forward_mmt(self, ocr_description_inputs, ocr_description_embed):
+    def forward_mmt(self, prev_inds, input_embed, fixed_ans_emb, input_attention_mask):
         """
             Forward to mmt layer
         """
         results = self.decoder(
-            prev_inds= ocr_description_inputs["input_ids"],
-            ocr_description_embed=ocr_description_embed,
-            fixed_ans_emb=self.classifier.weight,
-            ocr_description_attention_mask=ocr_description_inputs["attention_mask"]
+            prev_inds= prev_inds,
+            input_embed=input_embed,
+            fixed_ans_emb=fixed_ans_emb,
+            input_attention_mask=input_attention_mask
         )
         return results
         

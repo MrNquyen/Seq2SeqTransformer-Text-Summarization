@@ -3,6 +3,8 @@ import torch
 import torch.nn.functional as F
 from typing import List
 
+from icecream import ic
+
 # Fasttext
 def fasttext_embedding_module(model, word):
     ft_feat = model.get_word_vector(word)
@@ -33,7 +35,7 @@ def _batch_gather(x, inds):
     batch_size = x.size(0)
     length = x.size(1)
     dim = x.size(2)
-    x_flat = x.view(batch_size*length, dim)
+    x_flat = x.reshape(batch_size*length, dim)
 
     batch_offsets = torch.arange(batch_size, device=inds.device) * length
     batch_offsets = batch_offsets.unsqueeze(-1)

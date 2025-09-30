@@ -8,7 +8,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from utils.configs import Config
 from project.dataset.dataset import get_loader
-from utils.model_utils import get_optimizer_parameters
+from utils.model_utils import get_optimizer_parameters, lr_lambda_update
 from utils.module_utils import _batch_padding, _batch_padding_string
 from utils.logger import Logger
 from utils.metrics import metric_calculate
@@ -67,6 +67,7 @@ class Trainer():
         self.max_epochs = self.config.config_training["epochs"]
         self.batch_size = self.config.config_training["batch_size"]
         self.max_iterations = self.config.config_training["max_iterations"]
+        self.snapshot_interval = self.config.config_training["snapshot_interval"]
         self.current_iteration = 0
         self.current_epoch = 0
 
@@ -89,16 +90,17 @@ class Trainer():
     def build_scheduler(self, optimizer, config_lr_scheduler):
         if not config_lr_scheduler["status"]:
             return None
-        lr_scheduler = torch.optim.lr_scheduler.StepLR(
+        scheduler_func = lambda x: lr_lambda_update(x, config_lr_scheduler)
+            
+        lr_scheduler = torch.optim.lr_scheduler.LambdaLR(
             optimizer=optimizer,
-            step_size=config_lr_scheduler["step_size"],
-            gamma=config_lr_scheduler["gamma"]
+            lr_lambda=scheduler_func
         )
         return lr_scheduler
 
 
     def build_loss(self):
-        pad_idx = self.encoder.get_pad_token_id()
+        pad_idx = self.model.encoder_description.get_pad_token_id()
         loss_fn = nn.CrossEntropyLoss(ignore_index=pad_idx)
         return loss_fn
 
@@ -353,7 +355,7 @@ class Trainer():
             Predict batch
         """
         # Captioning
-        captions_pred = self.encoder.batch_decode(pred_inds, skip_special_tokens=True)
+        captions_pred = self.model.encoder_summary.batch_decode(pred_inds)
         return captions_pred # BS, 
     
 

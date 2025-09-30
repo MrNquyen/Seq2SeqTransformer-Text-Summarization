@@ -1,3 +1,4 @@
+from bisect import bisect
 
 def get_optimizer_parameters(model, config):
     parameters = model.parameters()
@@ -7,7 +8,6 @@ def get_optimizer_parameters(model, config):
         parameters = model.get_optimizer_parameters(config)
 
     return parameters
-
 
 def lr_lambda_update(i_iter, cfg):
     if (

@@ -13,6 +13,7 @@ from utils.module_utils import _batch_gather, _get_causal_mask
 class PrevEmbedding(nn.Module):
     def __init__(self, hidden_size):
         super().__init__()
+        self.device = registry.get_args("device")
         self.model_config = registry.get_config("model_attributes")
         self.decoder_config = self.model_config["decoder"]
         self.hidden_size = self.model_config["hidden_size"]
@@ -25,6 +26,7 @@ class PrevEmbedding(nn.Module):
         )
     
         self.emb_layer_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
+        self.fixed_ans_emb_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
         self.emb_dropout = nn.Dropout(self.decoder_config["dropout"])
 
 
@@ -70,7 +72,6 @@ class PrevEmbedding(nn.Module):
         fixed_ans_emb = self.fixed_ans_emb_norm(fixed_ans_emb)
         fixed_ans_emb = fixed_ans_emb.unsqueeze(0).expand(batch_size, -1, -1)
 
-        # ic(look_up_table_embedding.device, prev_inds.device)
         last_word_embed = _batch_gather(
             x=fixed_ans_emb, 
             inds=prev_inds
@@ -82,7 +83,7 @@ class PrevEmbedding(nn.Module):
             dtype=torch.long,
             device=self.device
         )
-        # ic(position_ids)
+    
         position_ids = position_ids.unsqueeze(0).expand(batch_size, -1)
         position_embed = self.positional_embedding(position_ids)
         position_embed = self.emb_layer_norm(position_embed)
@@ -104,9 +105,9 @@ class Decoder(PreTrainedModel):
     def forward(
             self,
             prev_inds: torch.Tensor,
-            ocr_description_embed: torch.Tensor,
+            input_embed: torch.Tensor,
             fixed_ans_emb: torch.Tensor,
-            ocr_description_attention_mask: torch.Tensor
+            input_attention_mask: torch.Tensor
         ):
         #-- Input features
         prev_embed = self.prev_embedding(
@@ -114,8 +115,12 @@ class Decoder(PreTrainedModel):
             prev_inds=prev_inds
         )
 
+        # Also check dtype of prev_inds:
+        assert prev_inds.dtype == torch.long, "prev_inds must be LongTensor for embedding lookup"
+
+
         encoder_inputs = torch.cat(
-            [ocr_description_embed, prev_embed],
+            [input_embed, prev_embed],
             dim=1
         )
 
@@ -123,18 +128,18 @@ class Decoder(PreTrainedModel):
         dec_mask = torch.zeros(
             prev_embed.size(0),
             prev_embed.size(1),
-            dtype=torch.float16,
+            dtype=torch.float32,
             device=self.device
         )
 
         attention_mask = torch.cat(
-            [ocr_description_attention_mask, dec_mask],
+            [input_attention_mask, dec_mask],
             dim=1
         )
         
         #-- Offsets of each modality in the joint embedding space
         encoder_input_begin = 0
-        encoder_input_end = encoder_input_begin + ocr_description_embed.size(1)
+        encoder_input_end = encoder_input_begin + input_embed.size(1)
         dec_input_begin = encoder_input_end
         dec_input_end = dec_input_begin + prev_embed.size(1)
 
@@ -152,7 +157,7 @@ class Decoder(PreTrainedModel):
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
         
         assert not extended_attention_mask.requires_grad
-        head_mask = [None] * self.config["num_layers"]
+        head_mask = [None] * self.type_config["nhead"]
 
         #-- Transformer Encoder
         encoder_outputs = self.encoder(

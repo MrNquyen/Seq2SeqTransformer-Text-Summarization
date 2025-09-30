@@ -1,21 +1,22 @@
 
 dataset_attributes:
   annotations:
-    train: "train.json"
-    val: "val.json"
-    test: "test.json"
+    train: /data2/npl/ViInfographicCaps/data/data/paddle_ocr_description/train_new.json
+    val: /data2/npl/ViInfographicCaps/data/data/paddle_ocr_description/val_new.json
+    test: /data2/npl/ViInfographicCaps/data/data/paddle_ocr_description/test_new.json
 model_attributes:
   hidden_size: 768
   encoder:
-    pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
-    max_length: 312
+    # pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
+    pretrained: /data2/npl/ViInfographicCaps/model/phobert-base
+    max_length: 128
     return_tensors: pt
   decoder:
-    pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
-    max_length: 128
+    # pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
+    pretrained: /data2/npl/ViInfographicCaps/model/phobert-base
+    max_length: 50
     num_layers: 4
     nhead: 12
-    max_length: 32
     dropout: 0.1
     return_tensors: pt
   adjust_optimizer:
@@ -29,7 +30,7 @@ optimizer_attributes:
   type: Adam
 training_parameters:
   epochs: 26
-  batch_size: 128
+  batch_size: 32
   iterations: 9000
   lr_scheduler:
     status: true
@@ -44,8 +45,9 @@ training_parameters:
     warmup_factor: 0.2
     warmup_iterations: 1000
   max_iterations: 12000
-  snapshot_interval: 300
+  # snapshot_interval: 300
   # snapshot_interval: 500
+  snapshot_interval: 1000
   monitored_metric: m4c_textcaps/textcaps_bleu4
   metric_minimize: false
   seed: 2021
