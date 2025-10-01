@@ -20,17 +20,18 @@ model_attributes:
     dropout: 0.1
     return_tensors: pt
   adjust_optimizer:
-    lr_scale: 0.1 # scale lr for finetuning modules
+    lr_scale: 0.3 # scale lr for finetuning modules
 optimizer_attributes:
   lr_scale: 0.1 # scale lr for finetuning modules
   params:
     eps: 1.0e-08
-    lr: 5e-5
-    weight_decay: 0
-  type: Adam
+    lr: 1e-5
+    weight_decay: 0.01
+  type: AdamW
 training_parameters:
-  epochs: 26
+  epochs: 40
   batch_size: 32
+  # batch_size: 16
   iterations: 9000
   lr_scheduler:
     status: true
@@ -38,8 +39,8 @@ training_parameters:
     step_size: 7000
     gamma : 0.1
     lr_steps:
-      - 6000
-      - 10000
+      - 4000
+      - 8000
     lr_ratio: 0.1
     use_warmup: true
     warmup_factor: 0.2

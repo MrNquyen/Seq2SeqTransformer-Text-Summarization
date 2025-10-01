@@ -24,6 +24,7 @@ class PrevEmbedding(nn.Module):
             num_embeddings=self.DEC_LENGTH, 
             embedding_dim=hidden_size
         )
+        # self.init_pe_weights()
     
         self.emb_layer_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
         self.fixed_ans_emb_norm = nn.LayerNorm(normalized_shape=self.hidden_size)

@@ -276,12 +276,14 @@ class Trainer():
                 loss = self._extract_loss(scores_output, target_inds)
                 loss_scalar = loss.detach().cpu().item()
                 losses.append(loss_scalar)
+                ic(loss_scalar)
                 
                 #~ Metrics calculation
                 if not epoch_id==None:
                     self.writer_evaluation.LOG_INFO(f"Logging at epoch {epoch_id}")
                 
                 pred_caps = self.get_pred_captions(pred_inds)
+                ic(pred_caps)
                 for id, pred_cap, ref_cap in zip(list_id, pred_caps, list_captions):
                     hypo[id] = [pred_cap]
                     ref[id]  = [ref_cap]

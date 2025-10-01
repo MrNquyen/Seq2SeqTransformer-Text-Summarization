@@ -63,6 +63,7 @@ class TransformerSummarizer(nn.Module):
     def adjust_lr(self):
         #~ Word Embedding
         self.add_finetune_modules(self.classifier)
+        # self.add_finetune_modules(self.decoder.encoder)
 
 
     #-- ADJUST LEARNING RATE
@@ -145,7 +146,7 @@ class TransformerSummarizer(nn.Module):
             prev_inds = torch.full((batch_size, num_dec_step), pad_idx).to(self.device)
             prev_inds[:, 0] = start_idx
             scores = None
-            for i in range(num_dec_step):
+            for i in range(1, num_dec_step):
                 results = self.forward_mmt(
                     prev_inds= prev_inds,
                     input_embed=ocr_description_embed,
@@ -154,7 +155,7 @@ class TransformerSummarizer(nn.Module):
                 )
                 scores = self.forward_output(results)
                 argmax_inds = scores.argmax(dim=-1)
-                prev_inds[:, 1:] = argmax_inds[:, :-1]
+                prev_inds[:, i] = argmax_inds[:, -1]
             return scores, prev_inds, gt_caption_inputs["input_ids"]
 
     def forward_mmt(self, prev_inds, input_embed, fixed_ans_emb, input_attention_mask):
