@@ -5,9 +5,10 @@ from project.modules.encoder import EncoderDescription, EncoderSummary
 from utils.registry import registry
 from utils.utils import count_nan
 from utils.module_utils import _batch_gather
-from modules.classifier import Classifier
+from project.modules.classifier import Classifier
 from torch.nn import functional as F
 from icecream import ic
+from tqdm import tqdm
 import math
 import time
 
@@ -46,7 +47,7 @@ class TransformerSummarizer(nn.Module):
     def build_layers(self):
         self.decoder = Decoder()
         self.encoder_description = EncoderDescription()
-        self.encoder_summary = EncoderSummary()
+        self.encoder_summary = EncoderSummary(self.encoder_description.tokenizer)
 
     # Need to modify
     def build_output(self):
@@ -146,7 +147,7 @@ class TransformerSummarizer(nn.Module):
             prev_inds = torch.full((batch_size, num_dec_step), pad_idx).to(self.device)
             prev_inds[:, 0] = start_idx
             scores = None
-            for i in range(1, num_dec_step):
+            for i in tqdm(range(1, num_dec_step)):
                 results = self.forward_mmt(
                     prev_inds= prev_inds,
                     input_embed=ocr_description_embed,

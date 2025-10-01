@@ -8,7 +8,7 @@ model_attributes:
   hidden_size: 768
   encoder:
     # pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
-    vocab_file: "save/vocabs.txt"
+    vocab_file: /data2/npl/ViInfographicCaps/data/data/new_split_format/vocabs.txt
     pretrained: /data2/npl/ViInfographicCaps/model/phobert-base
     max_length: 128
     max_dec_length: 50
@@ -32,7 +32,7 @@ optimizer_attributes:
   type: AdamW
 training_parameters:
   epochs: 40
-  batch_size: 32
+  batch_size: 64
   # batch_size: 16
   iterations: 9000
   lr_scheduler:
@@ -50,7 +50,7 @@ training_parameters:
   max_iterations: 12000
   # snapshot_interval: 300
   # snapshot_interval: 500
-  snapshot_interval: 1000
+  snapshot_interval: 2
   monitored_metric: m4c_textcaps/textcaps_bleu4
   metric_minimize: false
   seed: 2021

@@ -205,12 +205,12 @@ class Trainer():
                 self.writer.LOG_INFO(f"Training batch: {batch_id + 1}")
                 batch = self.preprocess_batch(batch)
                 batch = self.match_device(batch)
-                list_captions = batch["list_captions"]
 
                 self.current_iteration += 1
                 #~ Loss cal - For training so it is caption_ids
                 scores_output, caption_inds, target_inds = self._forward_pass(batch)
                 loss = self._extract_loss(scores_output, target_inds)
+                ic(loss)
                 self._backward(loss)
                 
                 if self.current_iteration > self.max_iterations:
@@ -219,8 +219,8 @@ class Trainer():
                 if self.current_iteration % self.snapshot_interval == 0:
                     _, _, val_final_scores, loss = self.evaluate(epoch_id=self.current_iteration, split="val")
                     # _, _, final_scores = self.evaluate(epoch_id=self.current_epoch, split="test")
-                    if val_final_scores["CIDEr"] > best_scores:
-                        best_scores = val_final_scores["CIDEr"]
+                    if val_final_scores["BLEU"] > best_scores:
+                        best_scores = val_final_scores["BLEU"]
                         self.save_model(
                             model=self.model,
                             loss=loss,

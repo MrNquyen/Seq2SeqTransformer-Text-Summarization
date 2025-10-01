@@ -47,13 +47,15 @@ class EncoderDescription(PreTrainedModel):
 
 class EncoderSummary(nn.Module):
     def __init__(self, tokenizer):
-        super().init()
+        super().__init__()
         self.model_config = registry.get_config("model_attributes")
         self.encoder_config = self.model_config["encoder"]
         self.device = registry.get_args("device")
         self.writer = registry.get_writer("common")
         self.tokenizer = tokenizer
         self.max_dec_length = self.encoder_config["max_dec_length"]
+
+        self.load_vocab()
 
     #-- Build
     def load_vocab(self):
