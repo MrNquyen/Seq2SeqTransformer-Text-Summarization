@@ -183,9 +183,9 @@ class Trainer():
     def preprocess_batch(self, batch):
         """
             Function:
-                - Padding ocr and obj to the same length
-                - Create mask for ocr and obj
+                - Padding batch features to the same length
         """
+        
         return batch
 
 

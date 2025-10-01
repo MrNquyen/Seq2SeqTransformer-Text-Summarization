@@ -119,13 +119,16 @@ class Decoder(PreTrainedModel):
         # Also check dtype of prev_inds:
         assert prev_inds.dtype == torch.long, "prev_inds must be LongTensor for embedding lookup"
 
-
         encoder_inputs = torch.cat(
             [input_embed, prev_embed],
             dim=1
         )
 
         #-- Mask Attention
+        # a zero mask for decoding steps, so the encoding steps elements can't
+        # attend to decoding steps.
+        # A triangular causal mask will be filled for the decoding steps
+        # later in extended_attention_mask
         dec_mask = torch.zeros(
             prev_embed.size(0),
             prev_embed.size(1),

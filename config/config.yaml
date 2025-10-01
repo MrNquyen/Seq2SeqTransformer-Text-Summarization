@@ -8,8 +8,10 @@ model_attributes:
   hidden_size: 768
   encoder:
     # pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased
+    vocab_file: "save/vocabs.txt"
     pretrained: /data2/npl/ViInfographicCaps/model/phobert-base
     max_length: 128
+    max_dec_length: 50
     return_tensors: pt
   decoder:
     # pretrained: /data2/npl/ViInfographicCaps/model/bert-base-uncased

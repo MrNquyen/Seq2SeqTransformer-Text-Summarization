@@ -6,20 +6,9 @@ from icecream import ic
 
 # Use to training tokenizer from scratch
 class BaseVocab(nn.Module):
-    PAD_TOKEN = "<pad>"
-    SOS_TOKEN = "<s>"
-    EOS_TOKEN = "</s>"
-    UNK_TOKEN = "<unk>"
-
-    PAD_INDEX = 0
-    SOS_INDEX = 1
-    EOS_INDEX = 2
-    UNK_INDEX = 3
-
     def __init__(
             self, 
             vocab_file,
-            embedding_dim=768
         ):
         """
             Vocab class to be used when you want to train word embeddings from
@@ -39,6 +28,7 @@ class BaseVocab(nn.Module):
         """
         super().__init__()
         #-- 1. Init stoi and itos
+        self.init_special_tokens()
         self.word_dict = {}
         self.word_dict[self.PAD_TOKEN] = self.PAD_INDEX
         self.word_dict[self.SOS_TOKEN] = self.SOS_INDEX
@@ -51,21 +41,28 @@ class BaseVocab(nn.Module):
         self.itos[self.EOS_INDEX] = self.EOS_TOKEN
         self.itos[self.UNK_INDEX] = self.UNK_TOKEN
 
-        self.embedding_dim = embedding_dim
-        # ic(vocab_file)
-        # ic(vocab_file)
         self.vocabs = load_vocab(vocab_file)
-        # ic(self.vocabs)s
         for i, token in enumerate(self.vocabs):
-            self.word_dict[token] = 4 + i + 1
-            self.itos[4 + i + 1] = token
+            token_idx = 4 + i
+            self.word_dict[token] = token_idx
+            self.itos[token_idx] = token
 
         self.stoi = defaultdict(lambda: self.UNK_INDEX, self.word_dict)
 
-        #-- 2. Init vector embedding for all word in vocabulary
-            #~ Random init matrix: len_vocab x embedding_size
-        self.vectors = torch.FloatTensor(self.get_size(), self.embedding_dim)
+    #-- Build
+    def init_special_tokens(self):
+        self.PAD_TOKEN = "<pad>"
+        self.SOS_TOKEN = "<s>"
+        self.EOS_TOKEN = "</s>"
+        self.UNK_TOKEN = "<unk>"
 
+        self.PAD_INDEX = 0
+        self.SOS_INDEX = 1
+        self.EOS_INDEX = 2
+        self.UNK_INDEX = 3
+
+
+    #-- Get
     def get_itos(self):
         return self.itos
 
@@ -107,21 +104,13 @@ class BaseVocab(nn.Module):
     
     def get_idx_word(self, idx):
         return self.itos[idx]
-    
-    def get_vector_item(self, idx):
-        return self.vectors[idx]
-
-    def get_word_embedding(self, word):
-        word_idx = self.get_word_idx(word)
-        return self.get_vector_item(word_idx)
         
     
 
 #------------------------------------------------
-class PretrainedVocab(BaseVocab):
+class CustomVocab(BaseVocab):
     def __init__(
             self, 
-            model=None,
             tokenizer=None,
             vocab_file=None,
         ):
@@ -136,126 +125,20 @@ class PretrainedVocab(BaseVocab):
             Vocabulary file containing list of words with one word per line
             which will be used to collect vectors
         """
-        embedding_dim = model.config.hidden_size
-        super().__init__(
-            vocab_file=vocab_file, 
-            embedding_dim=embedding_dim
-        )
-        self.model = model
         self.tokenizer = tokenizer
-        
-        # Vector embedding of inforgraphic vocabulary
-        self.vectors = nn.Embedding(
-            num_embeddings=len(self.stoi),
-            embedding_dim=self.embedding_dim
+        super().__init__(
+            vocab_file=vocab_file
         )
-        self.create_embedding()
-
+        # self.init_special_tokens()
     
-    def create_embedding(self):
-        """
-        Use to get embedding value of singular word
-        """
-        vocabs = list(self.stoi.keys())
-        # ic(vocabs)
-        # ic(vocabs)
 
-        # Pretrained static features
-        embeddings: torch.Tensor = self.model.embeddings.word_embeddings.weight
-        vocab_ids = self.tokenizer.convert_tokens_to_ids(
-            vocabs
-        )
-        
-        ## DEBUG
-        # for word, input_id in zip(vocabs, vocab_ids):
-        #     if len(input_id) > 1:
-        #         print(f"{word}: {input_id}")
-        ## DEBUG
+    def init_special_tokens(self):
+        self.PAD_TOKEN = self.tokenizer.pad_token
+        self.SOS_TOKEN = self.tokenizer.cls_token
+        self.EOS_TOKEN = self.tokenizer.eos_token
+        self.UNK_TOKEN = self.tokenizer.unk_token
 
-        vocab_embedding = embeddings[vocab_ids]
-        # ic(vocab_embedding.shape)
-        self.vectors.weight.data.copy_(vocab_embedding)
-
-    def get_vocab_embedding(self):
-        return self.vectors.weight.data
-
-    def get_embedding(self, words):
-        """
-            Function use to get embed vector of the batch of worf
-
-            Parameters:
-            ----------
-                words: List[str]
-                    List of token
-
-            Output:
-            ------
-                embed_vector: Tensor: len(words), 768
-
-        """
-        word_indices = [self.stoi[word] for word in words]
-        return self.vectors(torch.tensor(word_indices))
-        
-
-
-# -------------------------------
-class OCRVocabItem:
-    def __init__(
-            self,
-            each_ocr_tokens
-        ):
-        """
-            OCR Vocab for each images
-        """
-        self.stoi = {token: i for i, token in enumerate(each_ocr_tokens)}
-        self.itos = {i: token for i, token in enumerate(each_ocr_tokens)}
-
-    def get_word_idx(self, word):
-        """
-            Get the idx of the word
-        """
-        return self.stoi[word]
-    
-    def get_idx_word(self, idx):
-        """
-            Get the word of the idx
-        """
-        return self.itos[idx]
-
-
-class OCRVocab:
-    def __init__(
-            self,
-            ocr_tokens
-        ):
-        """
-        OCR token vocab class to get the matrix features for ocr_token
-        
-        Parameters:
-        ----------
-        ocr_tokens: List[List[str]]: BS, num_ocr
-            Batch list ocr tokens of images
-
-        Return:
-        ----------
-            List of OCRVocabItem: List[OCRVocabItem]
-
-
-        """
-        self.batch_size = len(ocr_tokens)
-
-        self.batch_ocr_vocab = []
-        for i, tokens in enumerate(ocr_tokens):
-            ocr_vocab_item = OCRVocabItem(
-                each_ocr_tokens=tokens
-            )
-            self.batch_ocr_vocab.append(ocr_vocab_item)
-        
-    def __getitem__(self, idx):
-        # Return the OCRVocabItem of corresponding idx 
-        return self.batch_ocr_vocab[idx]
-
-    def __len__(self):
-        # Get length
-        return self.batch_size
-
+        self.PAD_INDEX = self.tokenizer.pad_token_id
+        self.SOS_INDEX = self.tokenizer.cls_token_id
+        self.EOS_INDEX = self.tokenizer.eos_token_id
+        self.UNK_INDEX = self.tokenizer.unk_token_id
