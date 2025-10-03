@@ -58,5 +58,7 @@ def get_loader(dataset_config, batch_size, split):
         batch_size=batch_size,
         shuffle=split=="train",
         collate_fn=collate_fn,
+        num_workers=4,  # Add multiple workers
+        pin_memory=True
     )
     return dataloader

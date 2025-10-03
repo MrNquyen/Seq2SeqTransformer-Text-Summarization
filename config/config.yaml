@@ -50,7 +50,7 @@ training_parameters:
   max_iterations: 12000
   # snapshot_interval: 300
   # snapshot_interval: 500
-  snapshot_interval: 2
+  snapshot_interval: 500
   monitored_metric: m4c_textcaps/textcaps_bleu4
   metric_minimize: false
   seed: 2021

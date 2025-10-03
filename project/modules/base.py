@@ -27,7 +27,7 @@ class PreTrainedModel(nn.Module):
             self.model_name, 
             config=config
         ).to(self.device)
-        # self.model.gradient_checkpointing_enable()
+        self.model.gradient_checkpointing_enable()
 
     #-- Tokenize
     def tokenize(self, texts: List[str]):

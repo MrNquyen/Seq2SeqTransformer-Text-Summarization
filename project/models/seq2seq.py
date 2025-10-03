@@ -143,7 +143,7 @@ class TransformerSummarizer(nn.Module):
             # Init prev_ids with <s> idx at begin, else where with <pad> (at idx 0)
             start_idx = self.encoder_description.get_cls_token_id() 
             pad_idx = self.encoder_description.get_pad_token_id()
-
+            fixed_ans_emb = self.classifier.get_fixed_embed()
             prev_inds = torch.full((batch_size, num_dec_step), pad_idx).to(self.device)
             prev_inds[:, 0] = start_idx
             scores = None
@@ -151,7 +151,7 @@ class TransformerSummarizer(nn.Module):
                 results = self.forward_mmt(
                     prev_inds= prev_inds,
                     input_embed=ocr_description_embed,
-                    fixed_ans_emb=self.classifier.get_fixed_embed(),
+                    fixed_ans_emb=fixed_ans_emb,
                     input_attention_mask=ocr_description_inputs["attention_mask"]
                 )
                 scores = self.forward_output(results)

@@ -104,7 +104,7 @@ class EncoderSummary(nn.Module):
     
     def batch_decode(self, prev_inds):
         predictions = [
-            " ".join([self.vocab.get_idx_word(idx) for idx in sen_inds])
+            " ".join([self.vocab.get_idx_word(idx.item()) for idx in sen_inds])
             for sen_inds in prev_inds
         ]
         return predictions

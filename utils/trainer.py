@@ -217,10 +217,9 @@ class Trainer():
                     break
 
                 if self.current_iteration % self.snapshot_interval == 0:
-                    _, _, val_final_scores, loss = self.evaluate(epoch_id=self.current_iteration, split="val")
-                    # _, _, final_scores = self.evaluate(epoch_id=self.current_epoch, split="test")
-                    if val_final_scores["BLEU"] > best_scores:
-                        best_scores = val_final_scores["BLEU"]
+                    _, _, val_final_scores, loss = self.evaluate(iteration_id=self.current_iteration, split="val")
+                    if val_final_scores["ROUGE_L"] > best_scores:
+                        best_scores = val_final_scores["ROUGE_L"]
                         self.save_model(
                             model=self.model,
                             loss=loss,
@@ -251,7 +250,7 @@ class Trainer():
                     
                     
     
-    def evaluate(self, epoch_id=None, split="val"):
+    def evaluate(self, iteration_id=None, split="val"):
         if hasattr(self, f"{split}_loader"):
             dataloader = getattr(self, f"{split}_loader")
         else:
@@ -279,8 +278,8 @@ class Trainer():
                 ic(loss_scalar)
                 
                 #~ Metrics calculation
-                if not epoch_id==None:
-                    self.writer_evaluation.LOG_INFO(f"Logging at epoch {epoch_id}")
+                if not iteration_id==None:
+                    self.writer_evaluation.LOG_INFO(f"Logging at iteration: {iteration_id}")
                 
                 pred_caps = self.get_pred_captions(pred_inds)
                 ic(pred_caps)
@@ -291,7 +290,7 @@ class Trainer():
             # Calculate Metrics
             final_scores = metric_calculate(ref, hypo)
             avg_loss = sum(losses) / len(losses) 
-            self.writer_evaluation.LOG_INFO(f"|| Metrics Calculation || {split} split || epoch: {epoch_id} || loss: {avg_loss}")
+            self.writer_evaluation.LOG_INFO(f"|| Metrics Calculation || {split} split || epoch: {iteration_id} || loss: {avg_loss}")
             self.writer_evaluation.LOG_INFO(f"Final scores:\n{final_scores}")
             
             # Turn on train mode to continue training
@@ -307,10 +306,10 @@ class Trainer():
         hypo, ref = {}, {}
         if mode=="val":
             self.writer_inference.LOG_INFO("=== Inference Validation Split ===")
-            hypo, ref, _, _ = self.evaluate(epoch_id="Inference val set", split="val")
+            hypo, ref, _, _ = self.evaluate(iteration_id="Inference val set", split="val")
         elif mode=="test":
             self.writer_inference.LOG_INFO("=== Inference Test Split ===")
-            hypo, ref, _, _ = self.evaluate(epoch_id="Inference test set", split="test")
+            hypo, ref, _, _ = self.evaluate(iteration_id="Inference test set", split="test")
         else:
             self.writer_inference.LOG_ERROR(f"No mode available for {mode}")
         
