@@ -157,6 +157,9 @@ class Trainer():
             scores_reshape, targets_reshape
         ) 
         return loss_output
+    
+    def _gradient_clipping(self):
+        nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
 
     def _backward(self, loss):
         """
@@ -164,7 +167,7 @@ class Trainer():
         """
         self.optimizer.zero_grad()
         loss.backward()
-
+        self._gradient_clipping()
         self.optimizer.step()
         self._run_scheduler()
     
@@ -173,8 +176,12 @@ class Trainer():
         """
             Learning rate scheduler
         """
-        # self.lr_scheduler.step(self.current_iteration)
-        self.lr_scheduler.step()
+        self.lr_scheduler.step(self.current_iteration)
+
+        # debug: log LRs (every 1000 steps or so)
+        if self.current_iteration % 1000 == 0:
+            lrs = [pg['lr'] for pg in self.optimizer.param_groups]
+            self.writer.LOG_INFO(f"Iteration {self.current_iteration} LRs: {lrs}")
 
     #---- MODE
     def match_device(self, batch):
@@ -202,7 +209,7 @@ class Trainer():
             self.current_epoch += 1
             self.writer.LOG_INFO(f"Training epoch: {self.current_epoch}")
             for batch_id, batch in tqdm(enumerate(self.train_loader), desc="Iterating through train loader"):
-                self.writer.LOG_INFO(f"Training batch: {batch_id + 1}")
+                self.writer.LOG_INFO(f"Training iteration: {self.current_iteration}")
                 batch = self.preprocess_batch(batch)
                 batch = self.match_device(batch)
 
@@ -224,6 +231,7 @@ class Trainer():
                             model=self.model,
                             loss=loss,
                             optimizer=self.optimizer,
+                            lr_scheduler=self.lr_scheduler,
                             epoch=self.current_epoch, 
                             iteration=self.current_iteration,
                             metric_score=best_scores,
@@ -233,6 +241,7 @@ class Trainer():
                         model=self.model,
                         loss=loss,
                         optimizer=self.optimizer,
+                        lr_scheduler=self.lr_scheduler,
                         epoch=self.current_epoch, 
                         iteration=self.current_iteration,
                         metric_score=best_scores,
@@ -242,6 +251,7 @@ class Trainer():
                         model=self.model,
                         loss=loss,
                         optimizer=self.optimizer,
+                        lr_scheduler=self.lr_scheduler,
                         epoch=self.current_epoch, 
                         iteration=self.current_iteration,
                         metric_score=best_scores,
@@ -323,7 +333,7 @@ class Trainer():
         return hypo, ref
 
     #---- FINISH
-    def save_model(self, model, loss, optimizer, epoch, iteration, metric_score, use_name=""):
+    def save_model(self, model, loss, optimizer, lr_scheduler, epoch, iteration, metric_score, use_name=""):
         if not os.path.exists(self.args.save_dir):
             self.writer.LOG_INFO("Save dir not exist")
             os.makedirs(self.args.save_dir, exist_ok=True)
@@ -336,6 +346,7 @@ class Trainer():
             "iteration": iteration,
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
+            'scheduler_state_dict': getattr(lr_scheduler, 'state_dict', lambda: None)(),
             'loss': loss,
             "metric_score": metric_score
         }, model_path)
@@ -346,8 +357,27 @@ class Trainer():
         checkpoint = torch.load(model_path, map_location=self.device, weights_only=False)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        
+        #### DEBUG
+        for param_group in self.optimizer.param_groups:
+            ic(param_group['lr'])
+        #### DEBUG
+        
         self.current_epoch = checkpoint['epoch']
         loss = checkpoint['loss']
+
+        if self.lr_scheduler is not None and 'scheduler_state_dict' in checkpoint and checkpoint['scheduler_state_dict'] is not None:
+            try:
+                self.lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            except Exception as e:
+                # fallback: advance scheduler to current_iteration
+                self.writer.LOG_INFO("Warning: failed to load scheduler state; advancing scheduler to iteration")
+                self.lr_scheduler.step(self.current_iteration)
+        else:
+            # ensure scheduler is aligned with optimizer param_group's lrs
+            if self.lr_scheduler is not None:
+                self.lr_scheduler.step(self.current_iteration)
+
         self.writer.LOG_INFO(f"=== Load model at epoch: {self.current_epoch} || loss: {loss} ===")
 
     #---- METRIC CALCULATION
