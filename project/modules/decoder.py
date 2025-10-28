@@ -4,6 +4,7 @@ from torch import nn
 from torch.nn import functional as F
 from utils.registry import registry 
 from icecream import ic
+from utils.utils import check_requires_grad
 
 from project.modules.base import PreTrainedModel
 from utils.module_utils import _batch_gather, _get_causal_mask
@@ -24,29 +25,10 @@ class PrevEmbedding(nn.Module):
             num_embeddings=self.DEC_LENGTH, 
             embedding_dim=hidden_size
         )
-        # self.init_pe_weights()
     
         self.emb_layer_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
         self.fixed_ans_emb_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
         self.emb_dropout = nn.Dropout(self.decoder_config["dropout"])
-
-
-    def init_pe_weights(self):
-        """
-            Init weight for self.positional_embedding
-        """
-        # Create positional encoding sin cos from Attention Is All You Need! paper
-        pe = torch.zeros(self.DEC_LENGTH, self.hidden_size)
-        position = torch.arange(0, self.DEC_LENGTH, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(
-            torch.arange(0, self.hidden_size, 2).float() *
-            (-math.log(10000.0) / self.hidden_size))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        
-        # Assign custom weights
-        self.positional_embedding.weight.data = pe.clone()
-
 
     def forward(
             self,
@@ -102,6 +84,10 @@ class Decoder(PreTrainedModel):
         self.encoder = self.model.encoder
         self.prev_embedding = PrevEmbedding(hidden_size=self.hidden_size)
 
+        ### Check Encoder
+        # check_requires_grad(self.encoder, "encoder")
+        ### Check Encoder
+
 
     def forward(
             self,
@@ -140,13 +126,13 @@ class Decoder(PreTrainedModel):
             [input_attention_mask, dec_mask],
             dim=1
         )
+
         
         #-- Offsets of each modality in the joint embedding space
         encoder_input_begin = 0
         encoder_input_end = encoder_input_begin + input_embed.size(1)
         dec_input_begin = encoder_input_end
         dec_input_end = dec_input_begin + prev_embed.size(1)
-
 
         #-- Multihead broadcasting
         end_when_reach_maxlen = attention_mask.size(1) # 
@@ -170,7 +156,7 @@ class Decoder(PreTrainedModel):
             head_mask=head_mask
         )
 
-        mmt_seq_output = encoder_outputs[0]
+        mmt_seq_output = encoder_outputs["last_hidden_state"]
         mmt_dec_output = mmt_seq_output[:, dec_input_begin:]
 
         results = {

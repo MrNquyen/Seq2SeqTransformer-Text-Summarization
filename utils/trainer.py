@@ -12,10 +12,11 @@ from utils.model_utils import get_optimizer_parameters, lr_lambda_update
 from utils.module_utils import _batch_padding, _batch_padding_string
 from utils.logger import Logger
 from utils.metrics import metric_calculate
-from utils.utils import save_json
+from utils.utils import save_json, count_nan
 from utils.registry import registry
 from project.models.seq2seq import TransformerSummarizer
 from icecream import ic
+from utils.utils import check_requires_grad
 
 # ~Trainer~
 class Trainer():
@@ -210,6 +211,7 @@ class Trainer():
             self.writer.LOG_INFO(f"Training epoch: {self.current_epoch}")
             for batch_id, batch in tqdm(enumerate(self.train_loader), desc="Iterating through train loader"):
                 self.writer.LOG_INFO(f"Training iteration: {self.current_iteration}")
+
                 batch = self.preprocess_batch(batch)
                 batch = self.match_device(batch)
 

@@ -3,7 +3,7 @@ from torch import nn
 from project.modules.decoder import Decoder
 from project.modules.encoder import EncoderDescription, EncoderSummary
 from utils.registry import registry
-from utils.utils import count_nan
+from utils.utils import count_nan, check_requires_grad
 from utils.module_utils import _batch_gather
 from project.modules.classifier import Classifier
 from torch.nn import functional as F
@@ -38,6 +38,10 @@ class TransformerSummarizer(nn.Module):
 
         self.writer.LOG_INFO("=== Build adjust learning rate ===")
         self.adjust_lr()
+        
+        # self.writer.LOG_INFO("=== Check Gradient ===")
+        # self.check_grad()
+        # raise
     
 
     def build_writer(self):
@@ -63,8 +67,7 @@ class TransformerSummarizer(nn.Module):
     def adjust_lr(self):
         #~ Word Embedding
         # self.add_finetune_modules(self.classifier)
-        # self.add_finetune_modules(self.decoder.encoder)
-        pass
+        self.add_finetune_modules(self.decoder.encoder)
 
     #-- ADJUST LEARNING RATE
     def add_finetune_modules(self, module: nn.Module):
@@ -110,6 +113,14 @@ class TransformerSummarizer(nn.Module):
             std=0.1, 
             size=shape
         ).to(self.device)
+    
+
+    def check_grad(self):
+        check_requires_grad(self.encoder_description)
+        check_requires_grad(self.encoder_summary)
+        check_requires_grad(self.decoder)
+        check_requires_grad(self.classifier)        
+
         
     #-- FORWARD
     def forward(
@@ -121,6 +132,7 @@ class TransformerSummarizer(nn.Module):
         ocr_descriptions = batch["list_ocr_descriptions"]
 
         #-- Get inputs
+        
         ocr_description_inputs = self.encoder_description.tokenize(ocr_descriptions)
         ocr_description_embed = self.encoder_description.text_embedding(ocr_description_inputs)
 
@@ -147,6 +159,7 @@ class TransformerSummarizer(nn.Module):
             prev_inds = torch.full((batch_size, num_dec_step), pad_idx).to(self.device)
             prev_inds[:, 0] = start_idx
             scores = None
+
             for i in tqdm(range(1, num_dec_step)):
                 results = self.forward_mmt(
                     prev_inds= prev_inds,
@@ -156,7 +169,7 @@ class TransformerSummarizer(nn.Module):
                 )
                 scores = self.forward_output(results)
                 argmax_inds = scores.argmax(dim=-1)
-                prev_inds[:, i] = argmax_inds[:, -1]
+                prev_inds[:, i] = argmax_inds[:, i]
             return scores, prev_inds, gt_caption_input_inds
 
     def forward_mmt(self, prev_inds, input_embed, fixed_ans_emb, input_attention_mask):

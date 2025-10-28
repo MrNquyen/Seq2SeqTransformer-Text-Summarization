@@ -70,12 +70,20 @@ class PreTrainedModel(nn.Module):
                     'attention_mask': ...,
                 }
         """
-        with torch.no_grad():
+        # with torch.no_grad():
+        if self.training:
             features = self.model(
                 input_ids=inputs["input_ids"],
                 attention_mask=inputs["attention_mask"]
             )
-            return features.last_hidden_state
+        else:
+            with torch.no_grad():
+                features = self.model(
+                    input_ids=inputs["input_ids"].clone(),
+                    attention_mask=inputs["attention_mask"].clone()
+                )
+
+        return features.last_hidden_state
 
 
     #-- Decode

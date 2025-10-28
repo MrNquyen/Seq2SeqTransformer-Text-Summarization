@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=lstmr
-#SBATCH -o /data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/lstmr.out
+#SBATCH -o /datastore/npl/ViInfographicCaps/workspace/baseline/LSTMR/lstmr.out
 #SBATCH --error=lstmr_error.out
 #SBATCH --gres=gpu:1
 #SBATCH --mem=50G
@@ -10,7 +10,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --time=1000:00:00
 
-source /data2/npl/ViInfographicCaps/scripts/activate_global.sh
+source /datastore/npl/ViInfographicCaps/scripts/activate_global.sh
 
 which python
 
@@ -24,6 +24,6 @@ print("Torch CUDA available? ", torch.cuda.is_available())
 EOF
 
 echo "===== Training ====="
-cd /data2/npl/ViInfographicCaps/workspace/baseline/LSTMR
+cd /datastore/npl/ViInfographicCaps/workspace/baseline/LSTMR
 
-source /data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/scripts/train.sh
+source /datastore/npl/ViInfographicCaps/workspace/baseline/LSTMR/scripts/train.sh
