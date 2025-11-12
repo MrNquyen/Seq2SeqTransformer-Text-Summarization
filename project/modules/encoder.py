@@ -96,12 +96,16 @@ class EncoderSummary(nn.Module):
                 batch_inds (torch.Tensor): Tensor of inds
         """
         batch_tokens = self.pad_to_dec_length(batch_tokens)
+        pad_idx = self.vocab.get_pad_idx()
         batch_inds = [
             [self.vocab.get_word_idx(token) for token in tokens]
             for tokens in batch_tokens
         ]
+
+        #~ Batch inds and attention mask
         batch_inds = torch.tensor(batch_inds).to(self.device)
-        return batch_inds
+        attention_mask = (batch_inds != pad_idx).long()
+        return batch_inds, attention_mask
     
     def batch_decode(self, prev_inds):
         predictions = [

@@ -137,7 +137,7 @@ class TransformerSummarizer(nn.Module):
         ocr_description_embed = self.encoder_description.text_embedding(ocr_description_inputs)
 
         #-- Get summary inds
-        gt_caption_input_inds = self.encoder_summary.get_word_inds(gt_caption_tokens)
+        gt_caption_input_inds, gt_caption_attention_mask = self.encoder_summary.get_word_inds(gt_caption_tokens)
 
         #-- Get inds
         batch_size = len(gt_captions)
@@ -171,6 +171,7 @@ class TransformerSummarizer(nn.Module):
                 argmax_inds = scores.argmax(dim=-1)
                 prev_inds[:, i] = argmax_inds[:, i]
             return scores, prev_inds, gt_caption_input_inds
+
 
     def forward_mmt(self, prev_inds, input_embed, fixed_ans_emb, input_attention_mask):
         """
