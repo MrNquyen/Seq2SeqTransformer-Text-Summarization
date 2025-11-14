@@ -69,6 +69,7 @@ class Trainer():
         self.batch_size = self.config.config_training["batch_size"]
         self.max_iterations = self.config.config_training["max_iterations"]
         self.snapshot_interval = self.config.config_training["snapshot_interval"]
+        self.snapshot_epoch_interval = self.config.config_training["snapshot_epoch_interval"]
         self.current_iteration = 0
         self.current_epoch = 0
 
@@ -182,9 +183,8 @@ class Trainer():
         self.lr_scheduler.step()
 
         # debug: log LRs (every 5 epochs or so)
-        if self.current_epoch % 5 == 0:
-            lrs = [pg['lr'] for pg in self.optimizer.param_groups]
-            self.writer.LOG_INFO(f"Epoch {self.current_epoch} LRs: {lrs}")
+        lrs = [pg['lr'] for pg in self.optimizer.param_groups]
+        self.writer.LOG_INFO(f"Epoch {self.current_epoch} LRs: {lrs}")
 
     #---- MODE
     def match_device(self, batch):
@@ -226,7 +226,7 @@ class Trainer():
 
             #-- Run scheduler
             self._run_scheduler()
-            if self.current_epoch % 5 == 0:
+            if self.current_epoch % self.snapshot_epoch_interval == 0:
                 _, _, val_final_scores, loss = self.evaluate(iteration_id=self.current_iteration, split="val")
                 if val_final_scores["CIDEr"] > best_scores:
                     best_scores = val_final_scores["CIDEr"]
