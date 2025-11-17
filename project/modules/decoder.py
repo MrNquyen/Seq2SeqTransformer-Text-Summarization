@@ -12,7 +12,7 @@ from utils.module_utils import _batch_gather, _get_causal_mask
 
 # -- Previous Embedding
 class PrevEmbedding(nn.Module):
-    def __init__(self, hidden_size):
+    def __init__(self):
         super().__init__()
         self.device = registry.get_args("device")
         self.model_config = registry.get_config("model_attributes")
@@ -23,12 +23,31 @@ class PrevEmbedding(nn.Module):
 
         self.positional_embedding = nn.Embedding(
             num_embeddings=self.DEC_LENGTH, 
-            embedding_dim=hidden_size
+            embedding_dim=self.hidden_size
         )
+        self.init_pe_weights()
     
         self.emb_layer_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
         self.fixed_ans_emb_norm = nn.LayerNorm(normalized_shape=self.hidden_size)
         self.emb_dropout = nn.Dropout(self.decoder_config["dropout"])
+
+
+    def init_pe_weights(self):
+        """
+            Init weight for self.positional_embedding
+        """
+        # Create positional encoding sin cos from Attention Is All You Need! paper
+        pe = torch.zeros(self.DEC_LENGTH, self.hidden_size)
+        position = torch.arange(0, self.DEC_LENGTH, dtype=torch.float).unsqueeze(1)
+        div_term = torch.exp(
+            torch.arange(0, self.hidden_size, 2).float() *
+            (-math.log(10000.0) / self.hidden_size))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        
+        # Assign custom weights
+        self.positional_embedding.weight.data = pe.clone()
+
 
     def forward(
             self,
@@ -82,7 +101,7 @@ class Decoder(PreTrainedModel):
     def __init__(self):
         super().__init__(_type="decoder")
         self.encoder = self.model.encoder
-        self.prev_embedding = PrevEmbedding(hidden_size=self.hidden_size)
+        self.prev_embedding = PrevEmbedding()
 
         ### Check Encoder
         # check_requires_grad(self.encoder, "encoder")
