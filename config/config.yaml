@@ -53,10 +53,10 @@ training_parameters:
       - 10000
     lr_ratio: 0.1
     use_warmup: true
-    warmup_factor: 0.1
+    warmup_factor: 0.5
     warmup_iterations: 1000
     warmup_epochs: 1
-    decay_factor: 0.8
+    decay_factor: 0.5
   max_iterations: 12000
   # snapshot_interval: 300
   # snapshot_interval: 500

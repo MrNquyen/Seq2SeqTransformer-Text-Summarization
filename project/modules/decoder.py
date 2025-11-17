@@ -94,7 +94,8 @@ class Decoder(PreTrainedModel):
             prev_inds: torch.Tensor,
             input_embed: torch.Tensor,
             fixed_ans_emb: torch.Tensor,
-            input_attention_mask: torch.Tensor
+            input_attention_mask: torch.Tensor,
+            dec_mask: torch.Tensor = None
         ):
         #-- Input features
         prev_embed = self.prev_embedding(
@@ -115,12 +116,14 @@ class Decoder(PreTrainedModel):
         # attend to decoding steps.
         # A triangular causal mask will be filled for the decoding steps
         # later in extended_attention_mask
-        dec_mask = torch.zeros(
-            prev_embed.size(0),
-            prev_embed.size(1),
-            dtype=torch.float32,
-            device=self.device
-        )
+        if dec_mask is None:
+            #~ Inference mode
+            dec_mask = torch.zeros(
+                prev_embed.size(0),
+                prev_embed.size(1),
+                dtype=torch.float32,
+                device=self.device
+            )
 
         attention_mask = torch.cat(
             [input_attention_mask, dec_mask],
@@ -135,11 +138,12 @@ class Decoder(PreTrainedModel):
         dec_input_end = dec_input_begin + prev_embed.size(1)
 
         #-- Multihead broadcasting
-        end_when_reach_maxlen = attention_mask.size(1) # 
-        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
+        end_when_reach_maxlen = attention_mask.size(1) # BS, max_length
+        extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2) # BS, 1, 1, max_length
         extended_attention_mask = extended_attention_mask.repeat(
             1, 1, end_when_reach_maxlen, 1
         )
+        # extended_attention_mask = extended_attention_mask.expand(-1, 1, end_when_reach_maxlen, -1)
 
         #-- Casual mask
         extended_attention_mask[:, :, dec_input_begin:, dec_input_begin:] = \

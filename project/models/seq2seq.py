@@ -66,8 +66,7 @@ class TransformerSummarizer(nn.Module):
 
     def adjust_lr(self):
         #~ Word Embedding
-        # self.add_finetune_modules(self.classifier)
-        self.add_finetune_modules(self.decoder.encoder)
+        self.add_finetune_modules(self.decoder)
 
     #-- ADJUST LEARNING RATE
     def add_finetune_modules(self, module: nn.Module):
@@ -146,7 +145,8 @@ class TransformerSummarizer(nn.Module):
                 prev_inds= gt_caption_input_inds,
                 input_embed=ocr_description_embed,
                 fixed_ans_emb=self.classifier.get_fixed_embed(),
-                input_attention_mask=ocr_description_inputs["attention_mask"]
+                input_attention_mask=ocr_description_inputs["attention_mask"],
+                gt_caption_attention_mask=gt_caption_attention_mask
             )
             scores = self.forward_output(results=results)
             return scores, gt_caption_input_inds, gt_caption_input_inds
@@ -165,7 +165,8 @@ class TransformerSummarizer(nn.Module):
                     prev_inds= prev_inds,
                     input_embed=ocr_description_embed,
                     fixed_ans_emb=fixed_ans_emb,
-                    input_attention_mask=ocr_description_inputs["attention_mask"]
+                    input_attention_mask=ocr_description_inputs["attention_mask"],
+                    gt_caption_attention_mask=None
                 )
                 scores = self.forward_output(results)
                 argmax_inds = scores.argmax(dim=-1)
@@ -173,7 +174,7 @@ class TransformerSummarizer(nn.Module):
             return scores, prev_inds, gt_caption_input_inds
 
 
-    def forward_mmt(self, prev_inds, input_embed, fixed_ans_emb, input_attention_mask):
+    def forward_mmt(self, prev_inds, input_embed, fixed_ans_emb, input_attention_mask, gt_caption_attention_mask=None):
         """
             Forward to mmt layer
         """
@@ -181,7 +182,8 @@ class TransformerSummarizer(nn.Module):
             prev_inds= prev_inds,
             input_embed=input_embed,
             fixed_ans_emb=fixed_ans_emb,
-            input_attention_mask=input_attention_mask
+            input_attention_mask=input_attention_mask,
+            dec_mask=gt_caption_attention_mask
         )
         return results
         

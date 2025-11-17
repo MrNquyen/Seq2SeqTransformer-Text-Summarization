@@ -95,8 +95,10 @@ class EncoderSummary(nn.Module):
             Return:
                 batch_inds (torch.Tensor): Tensor of inds
         """
+        pad_token = self.vocab.get_pad_token()
+        pad_idx = self.vocab.get_word_idx(pad_token)
+
         batch_tokens = self.pad_to_dec_length(batch_tokens)
-        pad_idx = self.vocab.get_pad_idx()
         batch_inds = [
             [self.vocab.get_word_idx(token) for token in tokens]
             for tokens in batch_tokens
