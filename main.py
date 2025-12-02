@@ -3,9 +3,13 @@ from utils.configs import Config
 from utils.utils import load_yml
 from utils.trainer import Trainer
 
+import os
 import random
 import torch 
 import numpy as np
+
+os.environ["http_proxy"] = "http://127.0.0.1:3128"
+os.environ["https_proxy"] = "http://127.0.0.1:3128"
 
 def set_seed(seed: int = 42) -> None:
     """Sets the random seed for reproducibility across PyTorch, NumPy, and Python's random module."""

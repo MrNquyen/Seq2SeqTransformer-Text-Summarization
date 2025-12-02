@@ -1,0 +1,1 @@
+python main.py --config ./config/config_bosch.yaml --save_dir ./save --run_type inference --device cpu

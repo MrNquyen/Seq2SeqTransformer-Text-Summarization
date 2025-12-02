@@ -1,6 +1,7 @@
-save
-utils/pycocoevalcap
+# save
+# utils/pycocoevalcap
 save_dummy
 main_dummy.py
-data
+# data
 dummy
+__pycache__

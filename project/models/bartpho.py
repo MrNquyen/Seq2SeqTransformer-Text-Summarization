@@ -166,14 +166,14 @@ class TransformerSummarizer(nn.Module):
         batch_size = ocr_description_embed.size(0)
         vocab_size = self.classifier.get_vocab_size()
 
-            #~: Labels:     Tôi  là  AI  .  <EOS>
+            #~: Labels:  <s>   Tôi  là  AI  .  </s>
         labels_input_ids = gt_caption_input_ids.clone()
         labels_input_ids[labels_input_ids == self.encoder_summary.tokenizer.pad_token_id] = -100
 
         #-- Get ids
         if self.training:
             #~ Decoder input: shift right (prepend pad_token, remove last token)
-            #~ Example: [Tôi, là, AI, ., <eos>] -> [<pad>, Tôi, là, AI, .]
+            #~ Example: [<s>, Tôi, là, AI, ., </s>] -> [2, <s>, Tôi, là, AI, .]
             shift_decoder_input_ids = self.decoder._shift_right(gt_caption_input_ids.clone())
             decoder_attention_mask = (shift_decoder_input_ids != self.encoder_summary.tokenizer.pad_token_id).long()
 
@@ -216,7 +216,6 @@ class TransformerSummarizer(nn.Module):
                     scores[:, step, :] = step_scores[:, -1, :]
                     decoder_input_ids = torch.concat([decoder_input_ids, argmax_inds[:, -1]], dim=1)
 
-                # gen_ids = decoder_input_ids[:, 1:] #-- Ignore the first pad token
                 return scores, decoder_input_ids, labels_input_ids
             
 
