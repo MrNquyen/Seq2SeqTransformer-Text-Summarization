@@ -198,6 +198,7 @@ class TransformerSummarizer(nn.Module):
         
         else:
             #~ Greedy Search
+            bos_id = self.encoder_summary.tokenizer.bos_token_id
             eos_id = self.encoder_summary.tokenizer.eos_token_id
             pad_id = self.encoder_summary.tokenizer.pad_token_id
             # start_id = self.decoder.decoder.config.decoder_start_token_id     # Start with eos_id
@@ -212,7 +213,7 @@ class TransformerSummarizer(nn.Module):
                 scores = torch.zeros((batch_size, T, vocab_size), device=self.device)
                 decoder_input_ids = torch.full(
                     (batch_size, 1),
-                    fill_value=eos_id,
+                    fill_value=bos_id,
                     dtype=torch.long,
                     device=self.device
                 )
@@ -267,4 +268,3 @@ class TransformerSummarizer(nn.Module):
         bartpho_dec_last_hidden_state = results["bartpho_dec_last_hidden_state"]
         fixed_scores = self.classifier(bartpho_dec_last_hidden_state)
         return fixed_scores
-
