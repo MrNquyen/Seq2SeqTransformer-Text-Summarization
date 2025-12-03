@@ -28,7 +28,7 @@ def lr_lambda_update_epoch(current_epoch, cfg):
     lr_epoch_step_size = cfg["lr_epoch_step_size"]
 
     if current_epoch < warmup_epochs:
-        alpha float(current_epoch) / float(max(1, warmup_epochs))
+        alpha = float(current_epoch) / float(max(1, warmup_epochs))
         return warmup_factor * (1.0 - alpha) + alpha
     else:
         num_decays = (current_epoch - warmup_epochs) // lr_epoch_step_size
