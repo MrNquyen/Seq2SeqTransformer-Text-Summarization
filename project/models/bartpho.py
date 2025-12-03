@@ -169,19 +169,22 @@ class TransformerSummarizer(nn.Module):
 
         #~: Prepare labels - set -100 for pad tokens
         #~: GT sequence: <bos> Tôi là AI . <eos> <pad> <pad>
-        #~: Labels:      <bos> Tôi là AI . <eos> -100 -100
-        labels_input_ids = gt_caption_input_ids.clone()
+        #~: Labels:      Tôi là AI . <eos> -100 -100
+        labels_input_ids = gt_caption_input_ids[:, 1:].clone()
         labels_input_ids[labels_input_ids == self.encoder_summary.tokenizer.pad_token_id] = -100
         
         #-- Also mask the BOS token (decoder start token) if present at position 0
-        if labels_input_ids[:, 0].eq(self.decoder.decoder.config.decoder_start_token_id).any():
-            labels_input_ids[:, 0] = -100
+        # if labels_input_ids[:, 0].eq(self.decoder.decoder.config.decoder_start_token_id).any():
+        #     labels_input_ids[:, 0] = -100
 
         #-- Get ids
         if self.training:
             #~ Decoder input: shift right (prepend pad_token, remove last token)
-            #~ Example: [<bos>, Tôi, là, AI, ., <eos>] -> [<eos>, <bos>, Tôi, là, AI, .] (BART Shift với <eos>)
-            shift_decoder_input_ids = self.decoder._shift_right(gt_caption_input_ids.clone())
+            #~ Example: [<bos>, Tôi, là, AI, ., <eos>] -> [<eos>, <bos>, Tôi, là, AI, .] (BART Shift với <eos>) - Đang bị lỗi khi deploy bartpho syllable
+            # shift_decoder_input_ids = self.decoder._shift_right(gt_caption_input_ids.clone())
+
+            #~ Example: [<bos>, Tôi, là, AI, ., <eos>] -> [<bos>, Tôi, là, AI, .]
+            shift_decoder_input_ids = gt_caption_input_ids[:, :-1].contiguous()
             decoder_attention_mask = (shift_decoder_input_ids != self.encoder_summary.tokenizer.pad_token_id).long()
 
             results = self.forward_mmt(
@@ -197,23 +200,26 @@ class TransformerSummarizer(nn.Module):
             #~ Greedy Search
             eos_id = self.encoder_summary.tokenizer.eos_token_id
             pad_id = self.encoder_summary.tokenizer.pad_token_id
-            start_id = self.decoder.decoder.config.decoder_start_token_id
+            # start_id = self.decoder.decoder.config.decoder_start_token_id     # Start with eos_id
 
-            start_id = self.decoder.decoder.config.decoder_start_token_id
-            if start_id != eos_id:
-                raise ValueError(f"Warning: decoder_start_token_id is None, using EOS id: {start_id}")
+            # start_id = self.decoder.decoder.config.decoder_start_token_id
+            # if start_id != eos_id:
+            #     raise ValueError(f"Warning: decoder_start_token_id is None, using EOS id: {start_id}")
 
             with torch.no_grad():
-                scores = torch.zeros((batch_size, self.max_dec_length, vocab_size), device=self.device)
+                T = self.max_dec_length - 1 # Because using <s> at start token, not shifting like T5
+                
+                scores = torch.zeros((batch_size, T, vocab_size), device=self.device)
                 decoder_input_ids = torch.full(
                     (batch_size, 1),
-                    fill_value=start_id,
+                    fill_value=eos_id,
                     dtype=torch.long,
                     device=self.device
                 )
 
-                for step in range(self.max_dec_length):
+                for step in range(T):
                     decoder_attention_mask = (decoder_input_ids != pad_id).long()
+                
                     results = self.forward_mmt(
                         input_embed=ocr_description_embed,
                         input_attention_mask=ocr_description_attention_mask,
@@ -228,6 +234,7 @@ class TransformerSummarizer(nn.Module):
                     decoder_input_ids = torch.concat([decoder_input_ids, argmax_inds[:, -1]], dim=1)
 
                 # gen_ids = decoder_input_ids[:, 1:] #-- Ignore the first pad token
+                ic(scores.shape, labels_input_ids.shape)
                 return scores, decoder_input_ids, labels_input_ids
             
 
