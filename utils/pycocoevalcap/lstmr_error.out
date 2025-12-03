@@ -1,0 +1,32 @@
+/data2/npl/ViInfographicCaps/venv/global_venv/lib/python3.9/site-packages/transformers/utils/hub.py:111: FutureWarning: Using `TRANSFORMERS_CACHE` is deprecated and will be removed in v5 of Transformers. Use `HF_HOME` instead.
+  warnings.warn(
+2025-08-13 00:18 - INFO - === START BUILDING ===
+2025-08-13 00:18 - INFO - === Build model params ===
+2025-08-13 00:18 - INFO - === Build writer ===
+2025-08-13 00:18 - INFO - === Build model layers ===
+Traceback (most recent call last):
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/main.py", line 23, in <module>
+    trainer = Trainer(config, args)
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/utils/trainer.py", line 33, in __init__
+    self.build()
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/utils/trainer.py", line 59, in build
+    self.build_model()
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/utils/trainer.py", line 64, in build_model
+    self.model = LSTMR()
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/project/models/lstmr.py", line 21, in __init__
+    self.build()
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/project/models/lstmr.py", line 31, in build
+    self.build_layers()
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/project/models/lstmr.py", line 74, in build_layers
+    self.decoder = Decoder()
+  File "/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR/project/modules/decoder.py", line 21, in __init__
+    self.lstm_cell = nn.LSTMCell(
+  File "/data2/npl/ViInfographicCaps/venv/global_venv/lib/python3.9/site-packages/torch/nn/modules/rnn.py", line 1679, in __init__
+    super().__init__(input_size, hidden_size, bias, num_chunks=4, **factory_kwargs)
+  File "/data2/npl/ViInfographicCaps/venv/global_venv/lib/python3.9/site-packages/torch/nn/modules/rnn.py", line 1459, in __init__
+    torch.empty((num_chunks * hidden_size, input_size), **factory_kwargs)
+RuntimeError: CUDA error: invalid device ordinal
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.
+

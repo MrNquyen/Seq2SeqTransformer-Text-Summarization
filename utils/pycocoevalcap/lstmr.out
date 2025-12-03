@@ -1,0 +1,28 @@
+/data2/npl/ViInfographicCaps/venv/global_venv/bin/python
+===== GPU Status (nvidia-smi) =====
+Wed Aug 13 00:17:52 2025       
++---------------------------------------------------------------------------------------+
+| NVIDIA-SMI 535.161.08             Driver Version: 535.161.08   CUDA Version: 12.2     |
+|-----------------------------------------+----------------------+----------------------+
+| GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+| Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+|                                         |                      |               MIG M. |
+|=========================================+======================+======================|
+|   0  NVIDIA A100-SXM4-80GB          On  | 00000000:07:00.0 Off |                    0 |
+| N/A   29C    P0              98W / 400W |  42074MiB / 81920MiB |      5%      Default |
+|                                         |                      |             Disabled |
++-----------------------------------------+----------------------+----------------------+
+                                                                                         
++---------------------------------------------------------------------------------------+
+| Processes:                                                                            |
+|  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+|        ID   ID                                                             Usage      |
+|=======================================================================================|
+|    0   N/A  N/A    831915      C   python                                    35744MiB |
+|    0   N/A  N/A   3098276      C   python                                     4128MiB |
++---------------------------------------------------------------------------------------+
+===== Checking PyTorch CUDA availability =====
+Torch CUDA available?  True
+===== Training =====
+/data2/npl/ViInfographicCaps/workspace/baseline/LSTMR
+Build Logger

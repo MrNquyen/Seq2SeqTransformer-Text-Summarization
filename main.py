@@ -7,6 +7,10 @@ import random
 import torch 
 import numpy as np
 
+os.environ["http_proxy"] = "http://127.0.0.1:3128"
+os.environ["https_proxy"] = "http://127.0.0.1:3128"
+
+
 def set_seed(seed: int = 42) -> None:
     """Sets the random seed for reproducibility across PyTorch, NumPy, and Python's random module."""
     np.random.seed(seed)  # NumPy seed
