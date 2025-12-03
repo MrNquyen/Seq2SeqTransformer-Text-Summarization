@@ -12,6 +12,7 @@ from tqdm import tqdm
 import math
 import time
 
+
 from transformers import AutoConfig, AutoTokenizer, BartForConditionalGeneration
 
 
@@ -167,8 +168,8 @@ class TransformerSummarizer(nn.Module):
         vocab_size = self.classifier.get_vocab_size()
 
         #~: Prepare labels - set -100 for pad tokens
-        #~: GT sequence: <s> Tôi là AI . </s> <pad> <pad>
-        #~: Labels:      Tôi là AI . </s> -100 -100 -100
+        #~: GT sequence: <bos> Tôi là AI . <eos> <pad> <pad>
+        #~: Labels:      <bos> Tôi là AI . <eos> -100 -100
         labels_input_ids = gt_caption_input_ids.clone()
         labels_input_ids[labels_input_ids == self.encoder_summary.tokenizer.pad_token_id] = -100
         
@@ -179,7 +180,7 @@ class TransformerSummarizer(nn.Module):
         #-- Get ids
         if self.training:
             #~ Decoder input: shift right (prepend pad_token, remove last token)
-            #~ Example: [Tôi, là, AI, ., <eos>] -> [<pad>, Tôi, là, AI, .]
+            #~ Example: [<bos>, Tôi, là, AI, ., <eos>] -> [<eos>, <bos>, Tôi, là, AI, .] (BART Shift với <eos>)
             shift_decoder_input_ids = self.decoder._shift_right(gt_caption_input_ids.clone())
             decoder_attention_mask = (shift_decoder_input_ids != self.encoder_summary.tokenizer.pad_token_id).long()
 
@@ -197,6 +198,10 @@ class TransformerSummarizer(nn.Module):
             eos_id = self.encoder_summary.tokenizer.eos_token_id
             pad_id = self.encoder_summary.tokenizer.pad_token_id
             start_id = self.decoder.decoder.config.decoder_start_token_id
+
+            start_id = self.decoder.decoder.config.decoder_start_token_id
+            if start_id != eos_id:
+                raise ValueError(f"Warning: decoder_start_token_id is None, using EOS id: {start_id}")
 
             with torch.no_grad():
                 scores = torch.zeros((batch_size, self.max_dec_length, vocab_size), device=self.device)

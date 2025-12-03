@@ -3,6 +3,7 @@ from utils.configs import Config
 from utils.utils import load_yml
 from utils.trainer import Trainer
 
+import os
 import random
 import torch 
 import numpy as np
