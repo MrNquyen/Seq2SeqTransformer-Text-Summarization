@@ -146,8 +146,8 @@ class Trainer():
         """
             Forward to model
         """
-        scores, pred_inds, gt_inds = self.model(batch)
-        return scores, pred_inds, gt_inds
+        scores, pred_ids, gt_ids = self.model(batch)
+        return scores, pred_ids, gt_ids
 
 
     def _extract_loss(self, scores, targets):
@@ -219,8 +219,8 @@ class Trainer():
 
                 self.current_iteration += 1
                 #~ Loss cal - For training so it is caption_ids
-                scores_output, caption_inds, target_inds = self._forward_pass(batch)
-                loss = self._extract_loss(scores_output, target_inds)
+                scores_output, caption_ids, target_ids = self._forward_pass(batch)
+                loss = self._extract_loss(scores_output, target_ids)
                 ic(loss)
                 self._backward(loss)
 
@@ -293,8 +293,8 @@ class Trainer():
                 batch = self.match_device(batch)
                 
                 #~ Calculate loss
-                scores_output, pred_inds, target_inds = self._forward_pass(batch)
-                loss = self._extract_loss(scores_output, target_inds)
+                scores_output, pred_ids, target_ids = self._forward_pass(batch)
+                loss = self._extract_loss(scores_output, target_ids)
                 loss_scalar = loss.detach().cpu().item()
                 losses.append(loss_scalar)
                 ic(loss_scalar)
@@ -303,7 +303,7 @@ class Trainer():
                 if not epoch_id==None:
                     self.writer_evaluation.LOG_INFO(f"Logging at iteration: {epoch_id}")
                 
-                pred_caps = self.get_pred_captions(pred_inds)
+                pred_caps = self.get_pred_captions(pred_ids)
                 ic(pred_caps)
                 for id, pred_cap, ref_cap in zip(list_id, pred_caps, list_captions):
                     hypo[id] = [pred_cap]
@@ -393,12 +393,13 @@ class Trainer():
         self.writer.LOG_INFO(f"=== Load model at epoch: {self.current_epoch} || loss: {loss} ===")
 
     #---- METRIC CALCULATION
-    def get_pred_captions(self, pred_inds):
+    def get_pred_captions(self, pred_ids):
         """
             Predict batch
         """
         # Captioning
-        captions_pred = self.model.encoder_summary.batch_decode(pred_inds)
+        ic(pred_ids.shape)
+        captions_pred = self.model.encoder_summary.batch_decode(pred_ids)
         return captions_pred # BS, 
     
 

@@ -23,11 +23,13 @@ def lr_lambda_update(i_iter, cfg):
 
 def lr_lambda_update_epoch(current_epoch, cfg):
     warmup_epochs = cfg["warmup_epochs"]
+    warmup_factor = cfg["warmup_factor"]
     decay_factor = cfg["decay_factor"]
     lr_epoch_step_size = cfg["lr_epoch_step_size"]
 
     if current_epoch < warmup_epochs:
-        return float(current_epoch) / float(max(1, warmup_epochs))
+        alpha float(current_epoch) / float(max(1, warmup_epochs))
+        return warmup_factor * (1.0 - alpha) + alpha
     else:
         num_decays = (current_epoch - warmup_epochs) // lr_epoch_step_size
         return decay_factor ** (num_decays)
